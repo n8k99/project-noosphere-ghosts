@@ -223,7 +223,7 @@ The repository includes deterministic compression from tick reports into empiric
 
 ## API Contract
 
-Your backend must implement these endpoints:
+Minimum backend endpoints for the runtime loop:
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
@@ -234,19 +234,26 @@ Your backend must implement these endpoints:
 | GET/POST | `/api/conversations` | Read/write messages |
 | GET/PATCH | `/api/af64/tasks` | Read/update tasks |
 | POST | `/api/tick-log/batch` | Write tick history |
-| POST | `/api/tick-reports` | Optional richer tick report persistence |
 | POST | `/api/drives/tick` | Bulk drive decay |
 | POST | `/api/drives/:id/fulfill` | Fulfill a drive |
 | GET/POST | `/api/fitness/:agent_id` | Read/write fitness |
 
-The runtime also attempts to use these optional broker endpoints when available:
+Optional endpoints the runtime will use when available:
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
+| POST | `/api/tick-reports` | Richer tick report persistence |
 | POST | `/api/cognition/jobs` | Persist broker job creation |
 | GET | `/api/cognition/jobs` | Inspect pending/resolved cognition jobs |
 | PATCH | `/api/cognition/jobs/:id` | Persist job resolution and status transitions |
 | POST | `/api/cognition/telemetry` | Persist broker telemetry events |
+| POST | `/api/rollups/daily` | Persist deterministic daily rollups |
+| POST | `/api/rollups/weekly` | Persist deterministic weekly rollups |
+| POST | `/api/rollups/monthly` | Persist deterministic monthly rollups |
+| POST | `/api/rollups/quarterly` | Persist deterministic quarterly rollups |
+| POST | `/api/rollups/yearly` | Persist deterministic yearly rollups |
+
+If these optional endpoints are absent, the runtime falls back to local JSONL artifacts under `AF64_RUNTIME_DIR`.
 
 See `api_client.py` for the HTTP client implementation.
 
