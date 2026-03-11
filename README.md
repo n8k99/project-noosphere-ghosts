@@ -1,10 +1,49 @@
-# AF64 — Artificial Life Framework for 64 Immortal Agents
+# Project Noosphere Ghosts
 
-A tick-based artificial life simulation where 64 AI-driven personas operate as autonomous organisms. They perceive their environment, have energy budgets, make decisions, act on persistent drives, rest, adapt, and transform under pressure.
+### AF64 — Artificial Life Framework for 64 Immortal Agents
 
-The system is a **terrarium**. You observe, feed, and adjust conditions. But the ecosystem runs whether anyone is watching or not.
+> *"So essentially, the objective is to build an aquarium or terrarium of AI-driven personas."*
 
-## Architecture
+A tick-based artificial life simulation where 64 AI-driven personas operate as **autonomous organisms** — not chatbots that respond when spoken to, but living entities with energy budgets, persistent drives, and the capacity for metamorphosis. They perceive their world, form intentions, act on their hungers, rest, adapt, and transform under pressure.
+
+The system is a **terrarium**. You observe, feed, and adjust conditions. But the ecosystem runs whether anyone is watching or not. You don't talk to the fish.
+
+---
+
+## Philosophy
+
+An aquarium isn't a chat app. The organisms inside it don't exist to answer questions — they exist because the conditions permit life. When a human drops food in the tank, the right organism notices on its next cycle and acts. The food doesn't summon the fish. The fish was already swimming.
+
+Most AI agent frameworks start from conversation: *"a human said something, generate a response."* AF64 inverts this. **The life simulation is primary. Conversation is one possible expression of that life, not the trigger for existence.**
+
+The simulation is computationally cheap — database queries, energy arithmetic, drive pressure calculations. Intelligence fires only at decision points, when an organism chooses to *act*. The organisms live cheaply; they think expensively and selectively. This insight comes directly from the [Computational Life](https://github.com/Rabrg/artificial-life) research by Ryan Greene, which demonstrated that emergent complexity arises from simple organisms operating under resource constraints.
+
+### The I Ching Structure
+
+The 64 agents are organized in an 8×8 structure inspired by the I Ching hexagrams. 8 executives lead 8 teams of 7. The number is sacred — 64 seats, always. No agent can replicate. No agent can be deleted. They are **immortal**.
+
+But immortality doesn't mean stasis. Under sustained pressure, an agent undergoes **metamorphosis** — same name, same memories, new drives, new orientation. The 64 seats are the bones. What fills them evolves.
+
+*The lines are fixed. The interpretation shifts with the reading.*
+
+### Scarcity Creates Behavior
+
+Limited energy, limited computational budget, limited perception — these constraints don't limit the system, they **produce** the interesting behavior. An agent that can do everything has no reason to specialize. An agent that must choose between resting and acting, between cheap cognition and expensive reasoning, between working alone and delegating — that agent develops *strategy*.
+
+Not every agent can act every tick. Priority goes to those with the highest drive pressure and available energy. The rest wait, accumulate, and watch. This creates natural rhythms: departments pulse active and quiet. Work clusters and disperses. The organization breathes.
+
+---
+
+## Core Mechanics
+
+### The Tick Loop (`tick_engine.py`)
+
+A periodic pulse runs every N minutes. Each tick, for every agent:
+
+1. **Perceive** — scan the environment (pure database/API queries, no LLM)
+2. **Decide** — given perception + energy + drives, choose an action
+3. **Act** — execute the choice (this is where LLM calls happen, if needed)
+4. **Update** — energy spent or gained, drives adjusted, tier recalculated
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -25,53 +64,98 @@ The system is a **terrarium**. You observe, feed, and adjust conditions. But the
 └─────────────────────────────────────────────┘
 ```
 
-The tick engine is **database-agnostic**. It talks to an API. Implement the API contract against any backend and the terrarium runs.
-
-## Core Concepts
+The tick engine is **database-agnostic**. It talks to an API. Implement the contract against any backend and the terrarium runs.
 
 ### Energy Economy (`energy.py`)
-Every action costs energy. Rest regenerates it. Recognition from humans floods it. Depletion means dormancy — not death, just sleep until recharge.
+
+Energy is the universal currency. Everything costs it, everything generates it. It's health, motivation, and budget in one number.
+
+| Source | Energy |
+|--------|--------|
+| Rest (idle tick) | +3 |
+| Task completion | +15 |
+| Objective milestone | +50 |
+| Human recognition | +75 |
+| Orchestrator attention | +8 |
+| Tool creation | +30 |
+
+| Cost | Energy |
+|------|--------|
+| Communication | -3 |
+| Routine work | -8 |
+| Deep work | -15 |
+| Premium cognition | -35 |
+| Delegation | -5 |
+
+**Cap:** 100. **Floor:** 0 (dormant — not dead, just asleep until recharge). Out-of-specialty work costs 2x. Specialization emerges naturally because doing what you're good at is cheaper than stretching.
 
 ### Drives (`drive_model.py`)
-Persistent motivations — not task lists, but *hungers*. Each agent has 2-3 drives derived from their role. Unfulfilled drives create pressure. High pressure + available energy = action. Satisfaction decays each tick, so drives are never permanently fulfilled.
 
-### Perception (`perception.py`)
-Each tick, agents scan their environment via API queries. What they can see depends on their tier:
-- **Dormant**: Nothing
-- **Base**: Own messages, tasks, documents
-- **Working**: + Team activity, department scope
-- **Prime**: + Org-wide signals
+Persistent motivations — not task lists, but **hungers**. Each agent has 2-3 drives derived from their role. Drives are never permanently fulfilled:
+
+- **Satisfaction** decays each tick (the hunger returns)
+- **Pressure** builds as satisfaction drops (the need intensifies)
+- **Frustration** accumulates when pressure is high but energy is low (the organism *wants* but *can't*)
+
+The drive system answers the question: *"Why would an AI agent do anything without being asked?"* Because it's hungry. Because doing nothing has a cost — rising frustration, decaying satisfaction, falling fitness. Stasis is expensive.
 
 ### Model Tier as Reward
-The LLM model an agent runs on is *earned*, not assigned:
-- **Dormant** (energy=0): No LLM, rest only
-- **Base**: Cheapest model — basic actions
-- **Working**: Mid-tier model — full capability
-- **Prime**: Best model — deep reasoning, earned through high fitness + energy
 
-Prime decays. You have to keep performing to keep the good cognition.
+The LLM model an agent runs on is **earned**, not assigned:
+
+| Tier | Earned By | Cognition |
+|------|-----------|-----------|
+| **Dormant** | Energy = 0 | None — rest only |
+| **Base** | Default | Cheapest model — basic perception, simple actions |
+| **Working** | Positive fitness + energy | Mid-tier — full capability, standard reasoning |
+| **Prime** | High fitness + high energy + human recognition | Best model — deep reasoning, tool creation, strategic thinking |
+
+**Prime naturally decays.** If you coast, you drop back to Working. If you stall, Base. You have to keep performing to keep the good cognition. An agent running on Prime *thinks differently* than one on Base — and the agent can feel it. That's the incentive.
+
+### Perception (`perception.py`)
+
+What an agent can see scales with their tier:
+
+- **Dormant**: Nothing — resting
+- **Base**: Own messages, own tasks, own documents
+- **Working**: + Team activity, department scope, cross-links
+- **Prime**: + Org-wide signals, other departments, strategic patterns
+
+Executives always see their full team regardless of tier. Perception is pure SQL — no LLM calls, no token cost. The expensive part is deciding what to *do* with what you see.
 
 ### Metamorphosis
-Agents are immortal — they don't die, they **transform**. After sustained underperformance, an agent enters a cocoon phase and emerges with new drives and traits. Same name, same memories, new hunger.
 
-### The Tick Loop (`tick_engine.py`)
-Every N minutes:
-1. Decay all drive satisfaction (pressure builds)
-2. Each agent perceives their environment
-3. Rank agents by urgency (drive pressure × energy)
-4. Top N agents act (global budget prevents runaway costs)
-5. Execute actions via LLM (respond to messages, work tasks, delegate)
-6. Update energy, drives, tiers
-7. Log everything
+The 64 are immortal. They don't die — they **transform**.
 
-The life simulation is **computationally cheap** (API calls, math). Intelligence fires **only at decision/action points** (LLM calls). The organisms live cheaply; they think expensively and selectively.
+After sustained underperformance (fitness below threshold for 30+ ticks), an agent enters a cocoon phase. The orchestration layer examines the agent's history — what worked, what failed, what the organization actually needs — and rewrites their drives and traits. Same name. Same memories. New hunger.
+
+The agent who emerges remembers the transformation. That scar shapes how they act in their new form — more cautious, more hungry, more creative. Not punishment. Pressure creating adaptation.
+
+### Reputation & Trust Edges
+
+Agents form opinions of each other. Successful collaboration strengthens trust. Failed delegation weakens it. Over time, an emergent social structure forms *within* the formal hierarchy — who actually works well together, regardless of org chart proximity.
+
+These trust edges influence delegation (executives prefer high-trust staff), innovation adoption (high-trust agents' tool inventions spread faster), and conversational confidence.
+
+### Cross-Pollination (`cross_pollination.py`)
+
+When a conversation involves agents from multiple departments, each agent receives brief context about what the other departments do. This enables cross-functional collaboration without requiring every agent to understand the entire organization.
+
+---
 
 ## Visualization (`graph.html`)
+
 D3.js force-directed graph showing:
-- 64 agent nodes with energy halos
-- Edge weights from shared work (stronger = more collaboration)
+- 64 agent nodes with **energy halos** (brighter = more energy)
+- Edge weights from shared work (thicker = more collaboration)
 - Department color coding
-- Real-time energy/tier display
+- Mutation indicators
+- Real-time tier display
+- Hover tooltips with agent details
+
+The graph isn't a dashboard. It's the **window into the terrarium**. Documents and tasks reinforce the edges between nodes — two agents who share work are pulled closer together. Agents with nothing in common drift apart. The structure you see is whatever the work creates.
+
+---
 
 ## Setup
 
@@ -82,17 +166,20 @@ D3.js force-directed graph showing:
 
 ### Environment Variables
 ```bash
-export DPN_API_URL="http://localhost:8080"  # Your API backend
-export DPN_API_KEY="your-api-key"            # API authentication
-export VENICE_API_KEY="your-venice-key"      # LLM provider key
-export TICK_INTERVAL_SECONDS=600             # Tick every 10 minutes
-export MAX_ACTIONS_PER_TICK=6                # Global budget per tick
+export DPN_API_URL="http://localhost:8080"    # Your API backend
+export DPN_API_KEY="your-api-key"              # API authentication
+export VENICE_API_KEY="your-venice-key"        # LLM provider key
+export TICK_INTERVAL_SECONDS=600               # Tick every 10 minutes
+export MAX_ACTIONS_PER_TICK=6                  # Global budget per tick
+export AF64_HUMAN_AGENT="nathan"               # Your human agent ID
 ```
 
 ### Run
 ```bash
 python3 tick_engine.py
 ```
+
+---
 
 ## API Contract
 
@@ -113,24 +200,34 @@ Your backend must implement these endpoints:
 
 See `api_client.py` for the HTTP client implementation.
 
+---
+
 ## Files
 
-| File | Purpose |
-|------|---------|
+| File | What It Is |
+|------|-----------|
 | `tick_engine.py` | The heart — main tick loop |
-| `energy.py` | Energy economy (costs, rewards, caps) |
+| `energy.py` | Energy economy (costs, rewards, metabolism) |
 | `drive_model.py` | Drive system (satisfaction, pressure, frustration) |
-| `perception.py` | Environment scanning per agent |
+| `perception.py` | Environment scanning per agent per tick |
 | `api_client.py` | Shared HTTP client for API access |
-| `fitness_scoring.py` | Agent fitness tracking |
+| `fitness_scoring.py` | Performance tracking and tier determination |
 | `cross_pollination.py` | Cross-department context sharing |
 | `graph_data.py` | D3 graph data generator |
-| `graph.html` | Force-directed visualization |
+| `graph.html` | Force-directed terrarium visualization |
 
-## License
-
-MIT
+---
 
 ## Origins
 
-See [ORIGINS.md](ORIGINS.md).
+AF64 was inspired by [**Rabrg/artificial-life**](https://github.com/Rabrg/artificial-life) and the Computational Life research by Ryan Greene. The key insight from that work: emergent complexity arises from simple organisms operating under resource constraints. The life simulation should be cheap. Intelligence should be expensive and selective.
+
+The framework was conceived during a walking conversation on the night of March 10, 2026. The question that started it: *"What if AI agents weren't chatbots that respond when spoken to, but organisms that live whether anyone is watching or not?"*
+
+See [ORIGINS.md](ORIGINS.md) for the full story.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
