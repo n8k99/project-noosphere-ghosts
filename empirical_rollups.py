@@ -168,9 +168,9 @@ def build_daily_rollups(reports):
                 "top_actors": top_actors.most_common(10),
                 "total_energy_delta": total_energy_delta,
             },
-            "narrative_projection": {
+            "summary_scaffold": {
                 "status": "unfilled",
-                "note": "Narrative projection remains separate from the operational record.",
+                "note": "Application-specific synthesis can be layered on top of this empirical record.",
             },
         })
     return rollups
@@ -199,9 +199,9 @@ def build_weekly_rollups(daily_rollups):
                 "top_actors": merged["top_actors"],
                 "total_energy_delta": merged["total_energy_delta"],
             },
-            "narrative_projection": {
+            "summary_scaffold": {
                 "status": "unfilled",
-                "note": "Narrative projection remains separate from the operational record.",
+                "note": "Application-specific synthesis can be layered on top of this empirical record.",
             },
         })
     return weekly
@@ -229,9 +229,9 @@ def build_monthly_rollups(daily_rollups):
                 "top_actors": merged["top_actors"],
                 "total_energy_delta": merged["total_energy_delta"],
             },
-            "narrative_projection": {
+            "summary_scaffold": {
                 "status": "unfilled",
-                "note": "Monthly narrative projection remains separate from the operational record.",
+                "note": "Application-specific synthesis can be layered on top of this empirical record.",
             },
         })
     return monthly
@@ -259,9 +259,9 @@ def build_quarterly_rollups(monthly_rollups):
                 "top_actors": merged["top_actors"],
                 "total_energy_delta": merged["total_energy_delta"],
             },
-            "narrative_projection": {
+            "summary_scaffold": {
                 "status": "unfilled",
-                "note": "Quarterly narrative projection remains separate from the operational record.",
+                "note": "Application-specific synthesis can be layered on top of this empirical record.",
             },
         })
     return quarterly
@@ -289,13 +289,9 @@ def build_yearly_rollups(quarterly_rollups):
                 "top_actors": merged["top_actors"],
                 "total_energy_delta": merged["total_energy_delta"],
             },
-            "narrative_projection": {
+            "summary_scaffold": {
                 "status": "unfilled",
-                "note": "Yearly narrative projection remains separate from the operational record.",
-            },
-            "dual_ledger": {
-                "operational_record_ready": True,
-                "narrative_projection_ready": False,
+                "note": "Application-specific synthesis can be layered on top of this empirical record.",
             },
         })
     return yearly

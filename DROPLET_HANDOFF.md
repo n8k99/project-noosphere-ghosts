@@ -16,7 +16,6 @@ The runtime now brokers cognition in-process:
 * [`tick_reporting.py`](/home/n8k99/project-noosphere-ghosts/tick_reporting.py) writes tick reports to the API if available, otherwise to local JSONL.
 * [`graph_data.py`](/home/n8k99/project-noosphere-ghosts/graph_data.py) can surface local broker snapshot metadata for visualization.
 * [`empirical_rollups.py`](/home/n8k99/project-noosphere-ghosts/empirical_rollups.py) deterministically rebuilds daily and weekly rollups from tick reports.
-* [`dual_ledger_notes.py`](/home/n8k99/project-noosphere-ghosts/dual_ledger_notes.py) generates markdown scaffolds for daily/weekly/quarterly/yearly dual-ledger notes.
 
 ## Safe Runtime Mode Before Frontier Returns
 
@@ -48,7 +47,6 @@ Under `AF64_RUNTIME_DIR`:
 * `monthly_rollups.jsonl`
 * `quarterly_rollups.jsonl`
 * `yearly_rollups.jsonl`
-* `notes/`
 
 ## Work To Finish When Frontier Returns
 
@@ -76,7 +74,7 @@ Under `AF64_RUNTIME_DIR`:
 * Tick reports are local-fallback capable, but graph/dashboard ingestion is still early.
 * Request/grant linkage exists in tick reports, but downstream consumers are not yet standardized.
 * Cognitive winter exists operationally, but its thresholds and downstream ecological effects still need tuning.
-* Daily/weekly/monthly/quarterly/yearly empirical rollups and note scaffolds exist locally, but downstream publication into the private notes system is not wired here.
+* Daily/weekly/monthly/quarterly/yearly empirical rollups exist locally, but downstream publication into any private note or application layer is not wired here.
 
 ## Recommended Next Code Items
 

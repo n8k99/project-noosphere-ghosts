@@ -345,7 +345,7 @@ Recommended approach:
 * [x] weekly summaries are derived from daily records rather than ad hoc prompts 🆔 ng-k2-weekly-rollup 📅 2026-03-28
 * [ ] 2026-Q1 is rewritten or annotated to distinguish fiction from reality 🆔 ng-k3-q1-cleanup 📅 2026-03-29
 * [x] monthly and quarterly notes can be generated from empirical summaries 🆔 ng-k4-quarterly-empirical 📅 2026-03-31
-* [x] yearly note template supports dual ledger mode 🆔 ng-k5-yearly-dual-ledger 📅 2026-04-02
+* [ ] yearly note template supports dual ledger mode 🆔 ng-k5-yearly-dual-ledger 📅 2026-04-02
 
 ### Phase L Complete When:
 
@@ -357,8 +357,8 @@ Recommended approach:
 
 ### Phase M Complete When:
 
-* [x] quarterly notes contain explicit Operational Record and Narrative Projection sections 🆔 ng-m1-quarterly-dual-ledger 📅 2026-04-15
-* [x] yearly note contains both empirical summary and scaffold comparison 🆔 ng-m2-yearly-dual-ledger 📅 2026-04-20
+* [ ] quarterly notes contain explicit Operational Record and Narrative Projection sections 🆔 ng-m1-quarterly-dual-ledger 📅 2026-04-15
+* [ ] yearly note contains both empirical summary and scaffold comparison 🆔 ng-m2-yearly-dual-ledger 📅 2026-04-20
 * [ ] fictional 2023–2028 arc is preserved but bounded 🆔 ng-m3-scaffold-boundary 📅 2026-04-22
 * [ ] post-2028 planning template is empirically driven 🆔 ng-m4-post-2028-template 📅 2026-04-25
 * [ ] archive supports comparison between projection and actual operations 🆔 ng-m5-comparison-framework 📅 2026-04-28

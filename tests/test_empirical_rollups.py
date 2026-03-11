@@ -70,7 +70,7 @@ class EmpiricalRollupTests(unittest.TestCase):
                     "top_actors": [("eliana(work_task)", 2)],
                     "total_energy_delta": -5,
                 },
-                "narrative_projection": {"status": "unfilled"},
+                "summary_scaffold": {"status": "unfilled"},
             },
             {
                 "date": "2026-03-12",
@@ -83,7 +83,7 @@ class EmpiricalRollupTests(unittest.TestCase):
                     "top_actors": [("nova(respond_message)", 1)],
                     "total_energy_delta": 4,
                 },
-                "narrative_projection": {"status": "unfilled"},
+                "summary_scaffold": {"status": "unfilled"},
             },
         ]
 
@@ -110,7 +110,7 @@ class EmpiricalRollupTests(unittest.TestCase):
                     "top_actors": [("eliana(work_task)", 2)],
                     "total_energy_delta": -5,
                 },
-                "narrative_projection": {"status": "unfilled"},
+                "summary_scaffold": {"status": "unfilled"},
             },
             {
                 "date": "2026-03-25",
@@ -123,7 +123,7 @@ class EmpiricalRollupTests(unittest.TestCase):
                     "top_actors": [("nova(respond_message)", 2)],
                     "total_energy_delta": 7,
                 },
-                "narrative_projection": {"status": "unfilled"},
+                "summary_scaffold": {"status": "unfilled"},
             },
             {
                 "date": "2026-04-04",
@@ -136,7 +136,7 @@ class EmpiricalRollupTests(unittest.TestCase):
                     "top_actors": [("vincent(work_task)", 3)],
                     "total_energy_delta": 9,
                 },
-                "narrative_projection": {"status": "unfilled"},
+                "summary_scaffold": {"status": "unfilled"},
             },
         ]
 
@@ -149,8 +149,7 @@ class EmpiricalRollupTests(unittest.TestCase):
         self.assertEqual(len(yearly), 1)
         self.assertEqual(quarterly[0]["operational_record"]["agent_activity"]["active"], 9)
         self.assertEqual(quarterly[1]["operational_record"]["agent_activity"]["active"], 6)
-        self.assertTrue(yearly[0]["dual_ledger"]["operational_record_ready"])
-        self.assertFalse(yearly[0]["dual_ledger"]["narrative_projection_ready"])
+        self.assertEqual(yearly[0]["summary_scaffold"]["status"], "unfilled")
 
 
 if __name__ == "__main__":
