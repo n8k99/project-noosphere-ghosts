@@ -78,6 +78,7 @@ def generate_graph_data():
                 "pending_jobs": len(broker_snapshot.get("pending_jobs", [])),
                 "cache_entries": len(broker_snapshot.get("cache", {})),
                 "recent_telemetry_events": len(broker_snapshot.get("telemetry", [])),
+                "winter_active": broker_snapshot.get("winter_active", False),
             },
         }
     }

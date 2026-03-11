@@ -27,8 +27,11 @@ def execute_cognition_result(result):
         post_result = api_post("/api/conversations", payload)
         return {
             "action": "respond_message",
+            "job_id": result.job_id,
             "msg_id": msg.get("id"),
             "reply_id": post_result.get("id"),
+            "provider": result.provider_name,
+            "cached": result.cached,
             "response": result.content[:200],
         }
 
@@ -37,7 +40,10 @@ def execute_cognition_result(result):
         api_patch(f"/api/af64/tasks/{task['id']}", {"status": "in-progress"})
         return {
             "action": "work_task",
+            "job_id": result.job_id,
             "task_id": task.get("id"),
+            "provider": result.provider_name,
+            "cached": result.cached,
             "response": result.content[:200],
         }
 

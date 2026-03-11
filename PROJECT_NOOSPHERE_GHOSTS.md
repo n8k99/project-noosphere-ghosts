@@ -301,7 +301,7 @@ This is the execution checklist for the next working step in evolution: introduc
 * [x] C.2 Enforce a broker processing cap per tick 🆔 ng-c2-processing-cap
 * [x] C.3 Add cache-hit semantics for duplicate cognition contexts 🆔 ng-c3-cache-hit
 * [x] C.4 Introduce pending/deferred cognition as a normal ecological state 🆔 ng-c4-deferred-state
-* [ ] C.5 Introduce cognitive winter thresholds and thaw logic 🆔 ng-c5-winter-logic
+* [x] C.5 Introduce cognitive winter thresholds and thaw logic 🆔 ng-c5-winter-logic
 
 ### Workstream D: Reporting
 

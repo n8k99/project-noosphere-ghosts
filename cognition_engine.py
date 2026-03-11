@@ -21,14 +21,20 @@ class CognitionBroker:
         self.winter_pending_threshold = int(
             os.environ.get("COGNITIVE_WINTER_PENDING_THRESHOLD", str(max_jobs_per_tick * 3))
         )
+        self.thaw_pending_threshold = int(
+            os.environ.get("COGNITIVE_THAW_PENDING_THRESHOLD", str(max(1, self.winter_pending_threshold // 2)))
+        )
+        self.thaw_stability_ticks = int(os.environ.get("COGNITIVE_THAW_STABILITY_TICKS", "2"))
+        self.cache_ttl_seconds = int(os.environ.get("COGNITION_CACHE_TTL_SECONDS", "21600"))
         self.providers = build_default_provider_chain()
         self.pending_jobs: deque[CognitionJob] = deque()
         self.pending_by_agent: dict[str, CognitionJob] = {}
         self.ready_results: list[CognitionResult] = []
-        self.cache: dict[str, CognitionResult] = {}
+        self.cache: dict[str, dict] = {}
         self.telemetry: list[dict] = []
         self.last_tick_metrics = self._empty_metrics()
         self._winter_active = False
+        self._thaw_ready_ticks = 0
         self.load_state()
 
     def _empty_metrics(self):
@@ -37,6 +43,7 @@ class CognitionBroker:
             "resolved": 0,
             "deferred": 0,
             "cache_hits": 0,
+            "cache_expired": 0,
             "expired": 0,
             "retry_attempts": 0,
             "processed_budget": 0,
@@ -72,22 +79,65 @@ class CognitionBroker:
             return False
         return expires_at <= datetime.now(timezone.utc)
 
+    def _cache_entry_valid(self, entry):
+        expires_at = self._parse_iso(entry.get("expires_at"))
+        if expires_at is None:
+            return True
+        return expires_at > datetime.now(timezone.utc)
+
+    def _expire_cache(self):
+        retained = {}
+        for key, entry in self.cache.items():
+            if self._cache_entry_valid(entry):
+                retained[key] = entry
+                continue
+            self.last_tick_metrics["cache_expired"] += 1
+            self._record("cache_expired", cache_key=key)
+        self.cache = retained
+
     def get_ecology_state(self):
         frontier_enabled = self._frontier_enabled()
-        winter_active = (
-            self._force_winter()
-            or not frontier_enabled
-            or len(self.pending_jobs) >= self.winter_pending_threshold
-        )
+        pending_count = len(self.pending_jobs)
+        force_winter = self._force_winter()
+        scarcity_trigger = pending_count >= self.winter_pending_threshold
+        should_enter_winter = force_winter or not frontier_enabled or scarcity_trigger
+
+        if should_enter_winter:
+            winter_active = True
+        elif self._winter_active:
+            winter_active = self._thaw_ready_ticks < self.thaw_stability_ticks
+        else:
+            winter_active = False
+
         request_budget = self.winter_max_jobs_per_tick if winter_active else self.max_jobs_per_tick
+        winter_reason = None
+        if force_winter:
+            winter_reason = "forced"
+        elif not frontier_enabled:
+            winter_reason = "frontier_disabled"
+        elif scarcity_trigger:
+            winter_reason = "queue_pressure"
+        elif winter_active:
+            winter_reason = "thaw_stabilizing"
         return {
             "frontier_enabled": frontier_enabled,
             "winter_active": winter_active,
+            "winter_reason": winter_reason,
             "request_budget": request_budget,
             "pending_threshold": self.winter_pending_threshold,
+            "thaw_pending_threshold": self.thaw_pending_threshold,
+            "thaw_ready_ticks": self._thaw_ready_ticks,
         }
 
     def _refresh_ecology_state(self):
+        frontier_enabled = self._frontier_enabled()
+        pending_count = len(self.pending_jobs)
+        stable_conditions = frontier_enabled and pending_count <= self.thaw_pending_threshold and not self._force_winter()
+        if stable_conditions:
+            self._thaw_ready_ticks += 1
+        else:
+            self._thaw_ready_ticks = 0
+
         ecology = self.get_ecology_state()
         if ecology["winter_active"] != self._winter_active:
             self._winter_active = ecology["winter_active"]
@@ -117,10 +167,11 @@ class CognitionBroker:
             "pending_jobs": [job.to_dict() for job in self.pending_jobs],
             "pending_by_agent": {agent_id: job.to_dict() for agent_id, job in self.pending_by_agent.items()},
             "ready_results": [result.to_dict() for result in self.ready_results],
-            "cache": {key: result.to_dict() for key, result in self.cache.items()},
+            "cache": self.cache,
             "telemetry": self.telemetry[-200:],
             "last_tick_metrics": self.last_tick_metrics,
             "winter_active": self._winter_active,
+            "thaw_ready_ticks": self._thaw_ready_ticks,
         }
         with open(get_broker_state_path(), "w", encoding="utf-8") as f:
             json.dump(payload, f, sort_keys=True, default=str)
@@ -138,13 +189,21 @@ class CognitionBroker:
             for agent_id, job in payload.get("pending_by_agent", {}).items()
         }
         self.ready_results = [CognitionResult(**result) for result in payload.get("ready_results", [])]
-        self.cache = {
-            key: CognitionResult(**result)
-            for key, result in payload.get("cache", {}).items()
-        }
+        raw_cache = payload.get("cache", {})
+        self.cache = {}
+        for key, entry in raw_cache.items():
+            if isinstance(entry, dict) and "result" in entry:
+                self.cache[key] = entry
+            else:
+                self.cache[key] = {
+                    "result": entry,
+                    "cached_at": utc_now_iso(),
+                    "expires_at": None,
+                }
         self.telemetry = payload.get("telemetry", [])
         self.last_tick_metrics = payload.get("last_tick_metrics", self._empty_metrics())
         self._winter_active = payload.get("winter_active", False)
+        self._thaw_ready_ticks = payload.get("thaw_ready_ticks", 0)
 
     def submit_job(self, job: CognitionJob) -> CognitionJob:
         existing = self.pending_by_agent.get(job.agent_id)
@@ -152,8 +211,9 @@ class CognitionBroker:
             self._record("duplicate_pending", agent_id=job.agent_id, job_id=existing.id)
             return existing
 
-        if job.cache_key in self.cache:
-            cached_result = self.cache[job.cache_key]
+        cache_entry = self.cache.get(job.cache_key)
+        if cache_entry and self._cache_entry_valid(cache_entry):
+            cached_result = CognitionResult(**cache_entry["result"])
             ready_result = CognitionResult(
                 job_id=job.id,
                 agent_id=job.agent_id,
@@ -173,6 +233,10 @@ class CognitionBroker:
             self.last_tick_metrics["cache_hits"] += 1
             self._record("cache_hit", agent_id=job.agent_id, job_id=job.id, cache_key=job.cache_key)
             return job
+        if cache_entry and not self._cache_entry_valid(cache_entry):
+            self.cache.pop(job.cache_key, None)
+            self.last_tick_metrics["cache_expired"] += 1
+            self._record("cache_expired", cache_key=job.cache_key)
 
         self.pending_jobs.append(job)
         self.pending_by_agent[job.agent_id] = job
@@ -186,6 +250,7 @@ class CognitionBroker:
         return job
 
     def process_tick(self) -> list[CognitionResult]:
+        self._expire_cache()
         ecology = self._refresh_ecology_state()
         self._expire_jobs()
         results: list[CognitionResult] = list(self.ready_results)
@@ -246,7 +311,11 @@ class CognitionBroker:
             job.provider_name = provider.name
             job.result = result.to_dict()
             job.resolved_at = utc_now_iso()
-            self.cache[job.cache_key] = result
+            self.cache[job.cache_key] = {
+                "result": result.to_dict(),
+                "cached_at": utc_now_iso(),
+                "expires_at": self._parse_iso(job.expires_at).isoformat() if job.expires_at else None,
+            }
             self._record("resolved", agent_id=job.agent_id, job_id=job.id, provider=provider.name)
             try:
                 api_patch(f"/api/cognition/jobs/{job.id}", job.to_dict())

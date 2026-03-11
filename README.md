@@ -175,8 +175,10 @@ export MAX_ACTIONS_PER_TICK=6                  # Global budget per tick
 export AF64_HUMAN_AGENT="nathan"               # Your human agent ID
 export AF64_RUNTIME_DIR="/tmp/noosphere_ghosts" # Local broker state / report fallback
 export COGNITIVE_WINTER_MAX_JOBS_PER_TICK=2    # Reduced broker throughput during scarcity
+export COGNITIVE_THAW_STABILITY_TICKS=2         # Stable ticks required before winter exit
 export COGNITION_JOB_TTL_SECONDS=21600         # Default job expiry window
 export COGNITION_JOB_MAX_ATTEMPTS=3            # Default retry ceiling
+export COGNITION_CACHE_TTL_SECONDS=21600       # Cache retention window
 ```
 
 ### Run
@@ -192,6 +194,8 @@ The tick engine can run in two cognition modes:
 - **Fallback mode**: `FRONTIER_COGNITION_ENABLED=0`, which routes cognition through the built-in stub adapter
 
 Fallback mode is useful when provider tokens are unavailable or when you want to validate queueing, cache, telemetry, and recovery behavior without live frontier inference.
+
+When frontier cognition is unavailable or queue pressure grows too high, the broker enters **cognitive winter** and reduces request throughput. It exits winter only after stable thaw conditions hold for the configured number of ticks.
 
 ### Local Runtime Files
 

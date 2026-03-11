@@ -11,6 +11,7 @@ The runtime now brokers cognition in-process:
 * [`tick_engine.py`](/home/n8k99/project-noosphere-ghosts/tick_engine.py) submits cognition jobs and resolves them through the broker.
 * [`cognition_engine.py`](/home/n8k99/project-noosphere-ghosts/cognition_engine.py) manages queueing, cache, local telemetry, and restart recovery.
 * Broker jobs now track retry count, expiry, last attempt, and wait ticks.
+* Cognitive winter and thaw stability are now explicit runtime states.
 * [`provider_adapters.py`](/home/n8k99/project-noosphere-ghosts/provider_adapters.py) supports explicit frontier disable via `FRONTIER_COGNITION_ENABLED=0`.
 * [`tick_reporting.py`](/home/n8k99/project-noosphere-ghosts/tick_reporting.py) writes tick reports to the API if available, otherwise to local JSONL.
 * [`graph_data.py`](/home/n8k99/project-noosphere-ghosts/graph_data.py) can surface local broker snapshot metadata for visualization.
@@ -64,7 +65,7 @@ Under `AF64_RUNTIME_DIR`:
 
 * Backend cognition endpoints are not in this repo.
 * Tick reports are local-fallback capable, but graph/dashboard ingestion is still early.
-* `request_cognition` log entries exist, but richer request/grant linking is still incomplete.
+* Request/grant linkage exists in tick reports, but downstream consumers are not yet standardized.
 * Cognitive winter exists operationally, but its thresholds and downstream ecological effects still need tuning.
 
 ## Recommended Next Code Items

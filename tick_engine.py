@@ -75,6 +75,9 @@ def run_tick(tick_number):
     dormant_count = 0
     top_actor = None
     logs = []
+    cognition_requests = []
+    cognition_resolutions = []
+    agent_summaries = {}
 
     acting_set = set()
     request_budget = ecology_state["request_budget"]
@@ -87,6 +90,13 @@ def run_tick(tick_number):
 
         if a["energy"] <= 0:
             dormant_count += 1
+            agent_summaries[aid] = {
+                "agent_id": aid,
+                "status": "dormant",
+                "tier": a["tier"],
+                "energy_before": energy_before,
+                "energy_after": energy_before,
+            }
             logs.append({
                 "tick_number": tick_number, "agent_id": aid, "action_taken": "dormant",
                 "action_detail": {}, "energy_before": energy_before, "energy_after": energy_before,
@@ -104,6 +114,23 @@ def run_tick(tick_number):
                     BROKER.submit_job(job)
 
             if job is not None:
+                cognition_requests.append({
+                    "agent_id": aid,
+                    "job_id": job.id,
+                    "kind": job.kind,
+                    "priority": job.priority,
+                    "status": job.status,
+                    "wait_ticks": job.wait_ticks,
+                })
+                agent_summaries[aid] = {
+                    "agent_id": aid,
+                    "status": "requested_cognition",
+                    "tier": a["tier"],
+                    "energy_before": energy_before,
+                    "requested_job_id": job.id,
+                    "requested_kind": job.kind,
+                    "request_priority": job.priority,
+                }
                 logs.append({
                     "tick_number": tick_number, "agent_id": aid, "action_taken": "request_cognition",
                     "action_detail": {"job_id": job.id, "kind": job.kind, "priority": job.priority},
@@ -113,6 +140,13 @@ def run_tick(tick_number):
             else:
                 idle_count += 1
                 energy_after = update_energy(None, aid, REWARDS["rest"])
+                agent_summaries[aid] = {
+                    "agent_id": aid,
+                    "status": "idle",
+                    "tier": a["tier"],
+                    "energy_before": energy_before,
+                    "energy_after": energy_after,
+                }
                 logs.append({
                     "tick_number": tick_number, "agent_id": aid, "action_taken": "idle",
                     "action_detail": {}, "energy_before": energy_before,
@@ -123,6 +157,13 @@ def run_tick(tick_number):
             idle_count += 1
             energy_after = update_energy(None, aid, REWARDS["rest"])
             action_name = "winter_idle" if ecology_state["winter_active"] and has_actionable_items(perceptions[aid]) else "idle"
+            agent_summaries[aid] = {
+                "agent_id": aid,
+                "status": action_name,
+                "tier": a["tier"],
+                "energy_before": energy_before,
+                "energy_after": energy_after,
+            }
             logs.append({
                 "tick_number": tick_number, "agent_id": aid, "action_taken": action_name,
                 "action_detail": {"winter_active": True} if action_name == "winter_idle" else {}, "energy_before": energy_before,
@@ -153,6 +194,22 @@ def run_tick(tick_number):
                 f"energy={energy_before:.0f}→{energy_after:.0f}",
                 flush=True,
             )
+            cognition_resolutions.append({
+                "agent_id": result.agent_id,
+                "job_id": result.job_id,
+                "action_name": result.action_name,
+                "provider": result.provider_name,
+                "cached": result.cached,
+                "model_used": result.model_used,
+            })
+            agent_summary = agent_summaries.setdefault(result.agent_id, {"agent_id": result.agent_id})
+            agent_summary.update({
+                "resolved_job_id": result.job_id,
+                "resolved_action": result.action_name,
+                "provider": result.provider_name,
+                "cached": result.cached,
+                "energy_after": energy_after,
+            })
             logs.append({
                 "tick_number": tick_number,
                 "agent_id": result.agent_id,
@@ -230,6 +287,12 @@ def run_tick(tick_number):
         "top_actor": top_actor,
         "ecology": ecology_state,
         "broker": broker_summary,
+        "cognition": {
+            "requests": cognition_requests,
+            "resolutions": cognition_resolutions,
+            "pending_agents": sorted(BROKER.pending_by_agent.keys()),
+        },
+        "agent_summaries": list(agent_summaries.values()),
         "entries": logs,
     }
     report_sink = write_tick_report(tick_report)

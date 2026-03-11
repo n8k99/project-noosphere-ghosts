@@ -32,6 +32,9 @@ def make_job(agent_id="eliana", priority=10.0, cache_key="k1", kind="respond_mes
 class CognitionBrokerTests(unittest.TestCase):
     def setUp(self):
         os.environ["AF64_RUNTIME_DIR"] = tempfile.mkdtemp(prefix=f"noosphere-tests-{uuid.uuid4()}-")
+        os.environ["FRONTIER_COGNITION_ENABLED"] = "0"
+        os.environ["COGNITIVE_WINTER_MAX_JOBS_PER_TICK"] = "1"
+        os.environ["COGNITIVE_THAW_STABILITY_TICKS"] = "2"
 
     def test_processes_highest_priority_first(self):
         from cognition_engine import CognitionBroker
@@ -96,6 +99,34 @@ class CognitionBrokerTests(unittest.TestCase):
         self.assertTrue(summary["winter_active"])
         self.assertEqual(summary["request_budget"], 1)
         self.assertEqual(len(results), 1)
+
+    def test_cache_entry_expires(self):
+        from cognition_engine import CognitionBroker
+        broker = CognitionBroker(max_jobs_per_tick=1)
+        job = make_job(agent_id="cache", priority=10.0, cache_key="cache")
+        broker.submit_job(job)
+        broker.process_tick()
+        broker.cache["cache"]["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+
+        broker.start_tick()
+        broker.process_tick()
+
+        self.assertNotIn("cache", broker.cache)
+
+    def test_thaw_requires_stability(self):
+        from cognition_engine import CognitionBroker
+        os.environ["COGNITIVE_THAW_STABILITY_TICKS"] = "2"
+        broker = CognitionBroker(max_jobs_per_tick=3)
+
+        self.assertTrue(broker.get_ecology_state()["winter_active"])
+        broker.process_tick()
+        self.assertTrue(broker.get_ecology_state()["winter_active"])
+
+        os.environ["FRONTIER_COGNITION_ENABLED"] = "1"
+        broker.process_tick()
+        self.assertTrue(broker.get_ecology_state()["winter_active"])
+        broker.process_tick()
+        self.assertFalse(broker.get_ecology_state()["winter_active"])
 
 
 if __name__ == "__main__":
