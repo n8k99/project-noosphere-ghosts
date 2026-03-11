@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Noosphere — Artificial Life Graph</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0f;
+  color: #c0c0c0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  overflow: hidden;
+}
+
+#graph { width: 100vw; height: 100vh; }
+
+/* Nodes pulse based on energy */
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.node-glow {
+  animation: pulse 3s ease-in-out infinite;
+}
+
+/* Info panel */
+#info {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(10, 10, 20, 0.9);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 16px;
+  width: 320px;
+  font-size: 12px;
+  line-height: 1.6;
+  display: none;
+  z-index: 10;
+}
+#info h3 { color: #00ffcc; margin-bottom: 8px; font-size: 14px; }
+#info .stat { display: flex; justify-content: space-between; }
+#info .stat .label { color: #666; }
+#info .stat .value { color: #fff; }
+#info .bar { background: #1a1a2e; height: 6px; border-radius: 3px; margin: 4px 0; }
+#info .bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+#info .mutations { margin-top: 8px; border-top: 1px solid #222; padding-top: 8px; }
+#info .mutation { color: #888; font-size: 10px; margin: 2px 0; }
+
+/* Title */
+#title {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+}
+#title h1 {
+  font-size: 18px;
+  color: #00ffcc;
+  text-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+}
+#title .sub { font-size: 11px; color: #555; margin-top: 4px; }
+
+/* Legend */
+#legend {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  font-size: 10px;
+  z-index: 10;
+}
+#legend .item {
+  display: flex;
+  align-items: center;
+  margin: 3px 0;
+}
+#legend .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* Stats bar */
+#stats {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  font-size: 10px;
+  color: #444;
+  text-align: right;
+  z-index: 10;
+}
+
+/* Controls */
+#controls {
+  position: fixed;
+  top: 60px;
+  left: 20px;
+  z-index: 10;
+}
+#controls button {
+  background: rgba(0,255,204,0.1);
+  border: 1px solid #00ffcc33;
+  color: #00ffcc;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  margin: 2px;
+  font-family: inherit;
+}
+#controls button:hover { background: rgba(0,255,204,0.2); }
+#controls button.active { background: rgba(0,255,204,0.3); border-color: #00ffcc; }
+
+/* Tooltip */
+.tooltip {
+  position: absolute;
+  background: rgba(10,10,20,0.95);
+  border: 1px solid #333;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  pointer-events: none;
+  z-index: 20;
+}
+</style>
+</head>
+<body>
+
+<div id="title">
+  <h1>🔮 Noosphere — Artificial Life Graph</h1>
+  <div class="sub">64 agents | 8×8 I Ching structure | Eckenrode Muziekopname</div>
+</div>
+
+<div id="controls">
+  <button class="active" onclick="setEdgeFilter('all')">All Edges</button>
+  <button onclick="setEdgeFilter('conversation')">Conversations</button>
+  <button onclick="setEdgeFilter('reports_to')">Org Chart</button>
+  <button onclick="setEdgeFilter('delegation')">Delegation</button>
+  <button onclick="setEdgeFilter('shared_knowledge')">Knowledge</button>
+</div>
+
+<svg id="graph"></svg>
+
+<div id="info"></div>
+
+<div id="legend"></div>
+
+<div id="stats"></div>
+
+<div class="tooltip" id="tooltip" style="display:none"></div>
+
+<script>
+const DEPT_COLORS = {
+  'Engineering': '#00aaff',
+  'Content & Brand': '#ff6b9d',
+  'content_brand': '#ff6b9d',
+  'Creative': '#ffa500',
+  'creative': '#ffa500',
+  'Executive': '#00ffcc',
+  'Research': '#aa77ff',
+  'music': '#aa77ff',
+  'Legal': '#ffcc00',
+  'legal': '#ffcc00',
+  'Operations': '#ff4444',
+  'strategic_office': '#ff8888',
+  'Office of the CEO': '#ffffff',
+  'Systems': '#00ffcc',
+};
+
+const EDGE_COLORS = {
+  'conversation': '#ffffff15',
+  'reports_to': '#00ffcc20',
+  'delegation': '#ffaa0025',
+  'shared_knowledge': '#aa77ff10',
+};
+
+const EDGE_ACTIVE_COLORS = {
+  'conversation': '#ffffff40',
+  'reports_to': '#00ffcc60',
+  'delegation': '#ffaa0060',
+  'shared_knowledge': '#aa77ff30',
+};
+
+const TIER_RADIUS = { 'executive': 14, 'staff': 6, 'nathan': 20 };
+
+let currentFilter = 'all';
+let graphData = null;
+
+function setEdgeFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('#controls button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  updateEdgeVisibility();
+}
+
+function updateEdgeVisibility() {
+  d3.selectAll('.edge')
+    .attr('stroke-opacity', d => {
+      if (currentFilter === 'all') return 0.3;
+      return d.type === currentFilter ? 0.6 : 0.03;
+    })
+    .attr('stroke', d => {
+      if (currentFilter === 'all') return EDGE_COLORS[d.type] || '#ffffff10';
+      return d.type === currentFilter ? (EDGE_ACTIVE_COLORS[d.type] || '#ffffff40') : '#ffffff05';
+    });
+}
+
+async function loadGraph() {
+  const statusEl = document.getElementById('stats');
+  try {
+    statusEl.innerHTML = '<span style="color:#00ffcc">Loading graph data...</span>';
+    // Detect if loaded via proxy (path starts with /noosphere/) or direct
+    const base = window.location.pathname.includes('/noosphere') ? '/noosphere' : '';
+    const resp = await fetch(base + '/api/graph');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    if (!text) throw new Error('Empty response');
+    graphData = JSON.parse(text);
+    if (!graphData.nodes || !graphData.nodes.length) throw new Error('No nodes in data');
+    renderGraph(graphData);
+  } catch(e) {
+    console.error('Graph load failed:', e);
+    statusEl.innerHTML = '<span style="color:#ff4444">Error: ' + e.message + '</span>';
+  }
+}
+
+function renderGraph(data) {
+  const svg = d3.select('#graph');
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  svg.attr('width', width).attr('height', height);
+
+  // Clear
+  svg.selectAll('*').remove();
+
+  // Defs for gradients and filters
+  const defs = svg.append('defs');
+  
+  // Glow filter
+  const glow = defs.append('filter').attr('id', 'glow');
+  glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+  const merge = glow.append('feMerge');
+  merge.append('feMergeNode').attr('in', 'coloredBlur');
+  merge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  // Background particles (stars)
+  const bgGroup = svg.append('g').attr('class', 'bg');
+  for (let i = 0; i < 200; i++) {
+    bgGroup.append('circle')
+      .attr('cx', Math.random() * width)
+      .attr('cy', Math.random() * height)
+      .attr('r', Math.random() * 1.2)
+      .attr('fill', '#ffffff')
+      .attr('opacity', Math.random() * 0.3);
+  }
+
+  // Simulation
+  const simulation = d3.forceSimulation(data.nodes)
+    .force('link', d3.forceLink(data.edges).id(d => d.id)
+      .distance(d => {
+        if (d.type === 'reports_to') return 60;
+        if (d.type === 'conversation') return 80;
+        return 120;
+      })
+      .strength(d => {
+        if (d.type === 'reports_to') return 0.5;
+        if (d.type === 'conversation') return 0.1 * Math.min(d.weight, 10) / 10;
+        return 0.02;
+      })
+    )
+    .force('charge', d3.forceManyBody()
+      .strength(d => d.tier === 'executive' || d.id === 'nathan' ? -300 : -80)
+    )
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => getRadius(d) + 5))
+    .force('x', d3.forceX(width / 2).strength(0.03))
+    .force('y', d3.forceY(height / 2).strength(0.03));
+
+  // Edges
+  const edgeGroup = svg.append('g');
+  const edges = edgeGroup.selectAll('line')
+    .data(data.edges)
+    .join('line')
+    .attr('class', 'edge')
+    .attr('stroke', d => EDGE_COLORS[d.type] || '#ffffff10')
+    .attr('stroke-width', d => Math.max(0.5, Math.min(d.weight / 3, 3)))
+    .attr('stroke-opacity', 0.3);
+
+  // Node groups
+  const nodeGroup = svg.append('g');
+  const nodes = nodeGroup.selectAll('g')
+    .data(data.nodes)
+    .join('g')
+    .attr('class', 'node')
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended)
+    );
+
+  // Outer glow ring (energy indicator)
+  nodes.append('circle')
+    .attr('r', d => getRadius(d) + 3 + (d.energy / 200))
+    .attr('fill', 'none')
+    .attr('stroke', d => getDeptColor(d))
+    .attr('stroke-width', 0.5)
+    .attr('stroke-opacity', d => Math.min(0.5, d.energy / 500))
+    .attr('class', d => d.energy > 100 ? 'node-glow' : '');
+
+  // Main node circle
+  nodes.append('circle')
+    .attr('r', d => getRadius(d))
+    .attr('fill', d => getDeptColor(d))
+    .attr('fill-opacity', d => {
+      if (d.id === 'nathan') return 1;
+      if (d.tier === 'executive') return 0.8;
+      return 0.3 + Math.min(0.5, d.messages / 20);
+    })
+    .attr('stroke', d => getDeptColor(d))
+    .attr('stroke-width', d => d.mutations > 0 ? 2 : 0.5)
+    .attr('stroke-opacity', 0.8)
+    .attr('filter', d => (d.tier === 'executive' || d.id === 'nathan') ? 'url(#glow)' : null);
+
+  // Mutation indicator (small orbiting dots)
+  nodes.filter(d => d.mutations > 0).each(function(d) {
+    const g = d3.select(this);
+    for (let i = 0; i < Math.min(d.mutations, 5); i++) {
+      const angle = (i / d.mutations) * Math.PI * 2;
+      const r = getRadius(d) + 8;
+      g.append('circle')
+        .attr('cx', Math.cos(angle) * r)
+        .attr('cy', Math.sin(angle) * r)
+        .attr('r', 1.5)
+        .attr('fill', '#ff00ff')
+        .attr('opacity', 0.7)
+        .attr('class', 'node-glow');
+    }
+  });
+
+  // Labels (executives + active agents)
+  nodes.filter(d => d.tier === 'executive' || d.id === 'nathan' || d.messages > 5)
+    .append('text')
+    .attr('dy', d => getRadius(d) + 14)
+    .attr('text-anchor', 'middle')
+    .attr('fill', d => getDeptColor(d))
+    .attr('font-size', d => d.tier === 'executive' || d.id === 'nathan' ? '10px' : '8px')
+    .attr('opacity', 0.7)
+    .text(d => d.name.split(' ')[0]);
+
+  // Hover tooltip
+  const tooltip = d3.select('#tooltip');
+  nodes.on('mouseover', (event, d) => {
+    tooltip.style('display', 'block')
+      .style('left', (event.pageX + 15) + 'px')
+      .style('top', (event.pageY - 10) + 'px')
+      .html(`<strong>${d.name}</strong><br>
+        ${d.role}<br>
+        Energy: ${d.energy} | Fitness: ${d.fitness >= 0 ? '+' : ''}${d.fitness}<br>
+        Messages: ${d.messages} | Docs: ${d.document_links}<br>
+        Mutations: ${d.mutations} | Tasks: ${d.tasks_completed}`);
+    
+    // Highlight connected edges
+    edges.attr('stroke-opacity', e => 
+      (e.source.id === d.id || e.target.id === d.id) ? 0.8 : 0.05
+    ).attr('stroke-width', e =>
+      (e.source.id === d.id || e.target.id === d.id) ? 2 : 0.5
+    );
+  })
+  .on('mouseout', () => {
+    tooltip.style('display', 'none');
+    updateEdgeVisibility();
+    edges.attr('stroke-width', d => Math.max(0.5, Math.min(d.weight / 3, 3)));
+  })
+  .on('click', (event, d) => showInfo(d, data));
+
+  // Tick
+  simulation.on('tick', () => {
+    edges
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+    nodes.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  function dragstarted(event) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    event.subject.fx = event.subject.x;
+    event.subject.fy = event.subject.y;
+  }
+  function dragged(event) {
+    event.subject.fx = event.x;
+    event.subject.fy = event.y;
+  }
+  function dragended(event) {
+    if (!event.active) simulation.alphaTarget(0);
+    event.subject.fx = null;
+    event.subject.fy = null;
+  }
+
+  // Render legend
+  renderLegend(data);
+  renderStats(data);
+}
+
+function getRadius(d) {
+  if (d.id === 'nathan') return 18;
+  if (d.tier === 'executive') return 12;
+  return 6 + Math.min(6, d.messages / 5);
+}
+
+function getDeptColor(d) {
+  if (d.id === 'nathan') return '#ffd700';
+  return DEPT_COLORS[d.department] || '#555';
+}
+
+function showInfo(d, data) {
+  const info = document.getElementById('info');
+  const maxEnergy = Math.max(...data.nodes.map(n => n.energy));
+  const mutations = data.mutations.filter(m => m.agent === d.id);
+  
+  info.style.display = 'block';
+  info.innerHTML = `
+    <h3>${d.name}</h3>
+    <div style="color:#888;margin-bottom:8px">${d.role} — ${d.department}</div>
+    
+    <div class="stat"><span class="label">Energy</span><span class="value">${d.energy}</span></div>
+    <div class="bar"><div class="bar-fill" style="width:${(d.energy/maxEnergy*100)}%;background:${getDeptColor(d)}"></div></div>
+    
+    <div class="stat"><span class="label">Fitness</span><span class="value" style="color:${d.fitness >= 0 ? '#00ff88' : '#ff4444'}">${d.fitness >= 0 ? '+' : ''}${d.fitness}</span></div>
+    <div class="stat"><span class="label">Messages (30d)</span><span class="value">${d.messages}</span></div>
+    <div class="stat"><span class="label">Document Links</span><span class="value">${d.document_links}</span></div>
+    <div class="stat"><span class="label">Tasks Completed</span><span class="value">${d.tasks_completed}</span></div>
+    <div class="stat"><span class="label">Mutations</span><span class="value">${d.mutations}</span></div>
+    <div class="stat"><span class="label">Connectivity</span><span class="value">${d.connectivity}</span></div>
+    
+    ${mutations.length ? `
+    <div class="mutations">
+      <div style="color:#ff00ff;margin-bottom:4px">Evolution History</div>
+      ${mutations.map(m => `
+        <div class="mutation">
+          <span style="color:#ff00ff">●</span> ${m.type}: ${m.description.slice(0, 80)}...
+        </div>
+      `).join('')}
+    </div>
+    ` : ''}
+  `;
+}
+
+function renderLegend(data) {
+  const legend = document.getElementById('legend');
+  const depts = [...new Set(data.nodes.map(n => n.department))].sort();
+  legend.innerHTML = depts.map(d => `
+    <div class="item">
+      <div class="dot" style="background:${DEPT_COLORS[d] || '#555'}"></div>
+      <span>${d}</span>
+    </div>
+  `).join('');
+}
+
+function renderStats(data) {
+  const stats = document.getElementById('stats');
+  const execs = data.nodes.filter(n => n.tier === 'executive' || n.id === 'nathan');
+  const active = data.nodes.filter(n => n.messages > 0);
+  const mutated = data.nodes.filter(n => n.mutations > 0);
+  stats.innerHTML = `
+    ${data.meta.total_agents} organisms | ${data.meta.total_edges} connections<br>
+    ${active.length} active | ${mutated.length} mutated<br>
+    Total energy: ${data.meta.total_energy}<br>
+    <span style="color:#333">Eckenrode Muziekopname — 8×8=64 ☰</span>
+  `;
+}
+
+// Load
+loadGraph();
+
+// Auto-refresh every 5 minutes
+setInterval(loadGraph, 300000);
+</script>
+</body>
+</html>
