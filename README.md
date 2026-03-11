@@ -204,6 +204,31 @@ If the private backend does not expose cognition persistence or tick report endp
 - `cognition_broker_state.json`
 - `cognition_telemetry.jsonl`
 - `tick_reports.jsonl`
+- `daily_rollups.jsonl`
+- `weekly_rollups.jsonl`
+- `monthly_rollups.jsonl`
+- `quarterly_rollups.jsonl`
+- `yearly_rollups.jsonl`
+
+### Empirical Rollups
+
+The repository includes deterministic compression from tick reports into empirical rollups:
+
+- `python3 empirical_rollups.py` rebuilds daily and weekly rollups from `tick_reports.jsonl`
+- the same pipeline also emits monthly, quarterly, and yearly scaffolds
+- daily and weekly rollups separate `operational_record` from `narrative_projection`
+- rollups are written locally first and can later be mirrored into private backend endpoints
+
+### Dual-Ledger Note Scaffolds
+
+The repository also includes markdown scaffold generation for:
+
+- daily notes
+- weekly notes
+- quarterly notes
+- yearly notes
+
+`tick_reporting.py` will attempt to refresh rollups and regenerate note scaffolds after each tick report write. You can also run `python3 dual_ledger_notes.py` directly against local rollup files.
 
 ---
 
@@ -253,6 +278,8 @@ See `api_client.py` for the HTTP client implementation.
 | `action_planner.py` | Deterministic cognition request construction |
 | `action_executor.py` | Applies resolved cognition to side effects |
 | `tick_reporting.py` | Tick report persistence with local fallback |
+| `empirical_rollups.py` | Deterministic daily/weekly rollup builder from tick reports |
+| `dual_ledger_notes.py` | Markdown scaffold generator for dual-ledger notes |
 | `fitness_scoring.py` | Performance tracking and tier determination |
 | `cross_pollination.py` | Cross-department context sharing |
 | `graph_data.py` | D3 graph data generator |
