@@ -162,22 +162,44 @@ The graph isn't a dashboard. It's the **window into the terrarium**. Documents a
 ### Requirements
 - Python 3.10+
 - An API backend implementing the [API contract](#api-contract)
-- A Venice.ai API key (or modify `tick_engine.py` for your LLM provider)
+- A Venice.ai API key for frontier cognition, or fallback mode enabled
 
 ### Environment Variables
 ```bash
 export DPN_API_URL="http://localhost:8080"    # Your API backend
 export DPN_API_KEY="your-api-key"              # API authentication
 export VENICE_API_KEY="your-venice-key"        # LLM provider key
+export FRONTIER_COGNITION_ENABLED=1            # Set to 0 to force stub cognition
 export TICK_INTERVAL_SECONDS=600               # Tick every 10 minutes
 export MAX_ACTIONS_PER_TICK=6                  # Global budget per tick
 export AF64_HUMAN_AGENT="nathan"               # Your human agent ID
+export AF64_RUNTIME_DIR="/tmp/noosphere_ghosts" # Local broker state / report fallback
+export COGNITIVE_WINTER_MAX_JOBS_PER_TICK=2    # Reduced broker throughput during scarcity
+export COGNITION_JOB_TTL_SECONDS=21600         # Default job expiry window
+export COGNITION_JOB_MAX_ATTEMPTS=3            # Default retry ceiling
 ```
 
 ### Run
 ```bash
 python3 tick_engine.py
 ```
+
+### Runtime Modes
+
+The tick engine can run in two cognition modes:
+
+- **Frontier mode**: `FRONTIER_COGNITION_ENABLED=1` with a valid `VENICE_API_KEY`
+- **Fallback mode**: `FRONTIER_COGNITION_ENABLED=0`, which routes cognition through the built-in stub adapter
+
+Fallback mode is useful when provider tokens are unavailable or when you want to validate queueing, cache, telemetry, and recovery behavior without live frontier inference.
+
+### Local Runtime Files
+
+If the private backend does not expose cognition persistence or tick report endpoints yet, the runtime will fall back to local files under `AF64_RUNTIME_DIR`:
+
+- `cognition_broker_state.json`
+- `cognition_telemetry.jsonl`
+- `tick_reports.jsonl`
 
 ---
 
@@ -194,9 +216,19 @@ Your backend must implement these endpoints:
 | GET/POST | `/api/conversations` | Read/write messages |
 | GET/PATCH | `/api/af64/tasks` | Read/update tasks |
 | POST | `/api/tick-log/batch` | Write tick history |
+| POST | `/api/tick-reports` | Optional richer tick report persistence |
 | POST | `/api/drives/tick` | Bulk drive decay |
 | POST | `/api/drives/:id/fulfill` | Fulfill a drive |
 | GET/POST | `/api/fitness/:agent_id` | Read/write fitness |
+
+The runtime also attempts to use these optional broker endpoints when available:
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/cognition/jobs` | Persist broker job creation |
+| GET | `/api/cognition/jobs` | Inspect pending/resolved cognition jobs |
+| PATCH | `/api/cognition/jobs/:id` | Persist job resolution and status transitions |
+| POST | `/api/cognition/telemetry` | Persist broker telemetry events |
 
 See `api_client.py` for the HTTP client implementation.
 
@@ -211,6 +243,12 @@ See `api_client.py` for the HTTP client implementation.
 | `drive_model.py` | Drive system (satisfaction, pressure, frustration) |
 | `perception.py` | Environment scanning per agent per tick |
 | `api_client.py` | Shared HTTP client for API access |
+| `cognition_engine.py` | Shared cognition broker with queue, cache, telemetry, recovery |
+| `cognition_types.py` | Cognition job/result schemas |
+| `provider_adapters.py` | Frontier and fallback cognition adapters |
+| `action_planner.py` | Deterministic cognition request construction |
+| `action_executor.py` | Applies resolved cognition to side effects |
+| `tick_reporting.py` | Tick report persistence with local fallback |
 | `fitness_scoring.py` | Performance tracking and tier determination |
 | `cross_pollination.py` | Cross-department context sharing |
 | `graph_data.py` | D3 graph data generator |

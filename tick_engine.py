@@ -1,193 +1,31 @@
 #!/usr/bin/env python3
-"""AF64 Tick Engine — THE HEART of the living organization.
+"""AF64 Tick Engine — THE HEART of the living organization."""
 
-Each tick: perceive → decide → act → rest → evolve.
-Conservative first ticks: mostly rest + a few message responses.
-"""
-
-import json
 import os
-import sys
 import time
-import urllib.request
-import urllib.error
 from datetime import datetime, timezone
 
+from action_executor import execute_cognition_result
+from action_planner import build_cognition_job
 from api_client import api_get, api_post, api_patch
+from cognition_engine import CognitionBroker
 from energy import COSTS, REWARDS, update_energy, get_energy, get_cost
 from drive_model import tick_drives, fulfill_drive, get_highest_pressure_drive
 from perception import perceive, has_actionable_items
+from tick_reporting import write_tick_report
 
 # ── Config ──────────────────────────────────────────────────────────────
 TICK_INTERVAL = max(60, int(os.environ.get("TICK_INTERVAL_SECONDS", "600")))
 MAX_ACTIONS = int(os.environ.get("MAX_ACTIONS_PER_TICK", "6"))
-
-# Venice API
-VENICE_API_KEY = ""
-try:
-    # Load Venice API key from environment
-        VENICE_API_KEY = os.environ.get("VENICE_API_KEY", "")
-except Exception:
-    pass
-
-# Model routing by tier
-MODEL_MAP = {
-    "prime": "claude-sonnet-4-6",
-    "working": "claude-sonnet-4-5",
-    "base": "llama-3.3-70b",
-}
-
-# Persona directory
-PERSONA_DIR = os.path.expanduser("~/gotcha-workspace/context/personas/")
-_persona_cache = {}
-
-
-# ── Venice API (copied from noosphere_listener, independent) ────────────
-def call_venice(system_prompt, messages, model="llama-3.3-70b"):
-    """Call Venice.ai API. Returns response text or None."""
-    if not VENICE_API_KEY:
-        return None
-
-    venice_messages = [{"role": "system", "content": system_prompt}] + messages
-    payload = {
-        "model": model,
-        "max_tokens": 512,
-        "messages": venice_messages,
-    }
-
-    req = urllib.request.Request(
-        "https://api.venice.ai/api/v1/chat/completions",
-        data=json.dumps(payload).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {VENICE_API_KEY}",
-            "User-Agent": "Noosphere/1.0",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = resp.read()
-            if not raw:
-                return None
-            data = json.loads(raw)
-            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    except Exception as e:
-        print(f"  [venice-error] {e}", flush=True)
-        return None
-
-
-# ── Persona loading ─────────────────────────────────────────────────────
-def load_persona(agent_id, agent_info):
-    """Load persona text for an agent. Cached."""
-    if agent_id in _persona_cache:
-        return _persona_cache[agent_id]
-
-    # Try file
-    persona_files = {
-        "nova": None, "eliana": "eliana.md", "sarah": "sarah.md",
-        "kathryn": "kathryn.md", "sylvia": "sylvia.md", "vincent": "vincent.md",
-        "jmax": "maxwell.md", "lrm": "morgan.md",
-    }
-    fname = persona_files.get(agent_id)
-    if fname:
-        path = os.path.join(PERSONA_DIR, fname)
-        try:
-            with open(path) as f:
-                content = f.read()
-            if content.startswith("---"):
-                parts = content.split("---", 2)
-                if len(parts) >= 3:
-                    content = parts[2].strip()
-            _persona_cache[agent_id] = content
-            return content
-        except Exception:
-            pass
-
-    # Try DB personnel file via API
-    try:
-        full_name = agent_info.get("full_name", agent_id)
-        name_nospace = full_name.replace(" ", "").replace(".", "")
-        docs = api_get("/api/af64/documents", {
-            "path_prefix": f"Areas/Eckenrode Muziekopname/EM Staff/{name_nospace}",
-            "limit": 1,
-        })
-        if docs and len(docs) > 0:
-            # We only get summary from the API, not content. Use fallback.
-            pass
-    except Exception:
-        pass
-
-    # Fallback
-    fallback = f"You are {agent_info.get('full_name', agent_id)}, {agent_info.get('role', 'staff')} at Eckenrode Muziekopname."
-    _persona_cache[agent_id] = fallback
-    return fallback
-
-
-# ── Action execution ────────────────────────────────────────────────────
-def execute_respond_message(agent_id, agent_info, perception, tier):
-    """Respond to the most recent unread message via Venice."""
-    msg = perception["messages"][0]
-    model = MODEL_MAP.get(tier, "llama-3.3-70b")
-
-    persona = load_persona(agent_id, agent_info)
-    system_prompt = f"""{persona}
-
-You are responding to a message in the Noosphere. Be concise (1-2 paragraphs max). Have opinions. No filler.
-Nathan is the CEO. Don't ask permission, just do your job."""
-
-    user_content = f"[{msg['from']}]: {msg['message']}"
-    messages = [{"role": "user", "content": user_content}]
-
-    response = call_venice(system_prompt, messages, model=model)
-    if not response:
-        return None, model, False
-
-    # Post reply via API
-    thread_id = msg.get("thread_id")
-    channel = msg.get("channel", "noosphere")
-    metadata = {"responding_to": str(msg["id"]), "source": "tick_engine"}
-
-    result = api_post("/api/conversations", {
-        "from_agent": agent_id,
-        "to_agent": [msg["from"]],
-        "message": response,
-        "channel": channel,
-        "thread_id": thread_id,
-        "metadata": metadata,
-    })
-
-    new_id = result.get("id")
-    return {"action": "respond_message", "msg_id": msg["id"], "reply_id": new_id, "response": response[:200]}, model, True
-
-
-def execute_work_task(agent_id, agent_info, perception, tier):
-    """Work on the highest priority open task via Venice."""
-    task = perception["tasks"][0]
-    model = MODEL_MAP.get(tier, "llama-3.3-70b")
-
-    persona = load_persona(agent_id, agent_info)
-    system_prompt = f"""{persona}
-
-You are working on a task. Provide a concise progress update or completion report.
-Be specific about what you did. 1-2 paragraphs max."""
-
-    user_content = f"Task #{task['id']}: {task['text']}\nStatus: {task['status']}\nAssigned by: {task.get('assigned_by', 'unknown')}"
-    messages = [{"role": "user", "content": user_content}]
-
-    response = call_venice(system_prompt, messages, model=model)
-    if not response:
-        return None, model, False
-
-    # Update task via API
-    api_patch(f"/api/af64/tasks/{task['id']}", {"status": "in-progress"})
-
-    return {"action": "work_task", "task_id": task["id"], "response": response[:200]}, model, True
+BROKER = CognitionBroker(max_jobs_per_tick=MAX_ACTIONS)
 
 
 # ── Main tick loop ──────────────────────────────────────────────────────
 def run_tick(tick_number):
     """Execute one tick of the engine."""
     now = datetime.now(timezone.utc)
+    BROKER.start_tick()
+    ecology_state = BROKER.get_ecology_state()
 
     # Load all agents with state via API
     agent_list = api_get("/api/agents")
@@ -231,7 +69,7 @@ def run_tick(tick_number):
         rankings.append((aid, urgency, drive))
     rankings.sort(key=lambda x: -x[1])
 
-    # Phase 4: Top N act
+    # Phase 4: Top N request cognition
     active_count = 0
     idle_count = 0
     dormant_count = 0
@@ -239,7 +77,8 @@ def run_tick(tick_number):
     logs = []
 
     acting_set = set()
-    for aid, urgency, drive in rankings[:MAX_ACTIONS]:
+    request_budget = ecology_state["request_budget"]
+    for aid, urgency, drive in rankings[:request_budget]:
         if has_actionable_items(perceptions[aid]):
             acting_set.add(aid)
 
@@ -257,62 +96,78 @@ def run_tick(tick_number):
 
         if aid in acting_set:
             p = perceptions[aid]
-            action_detail = None
-            model_used = None
-            llm_called = False
-            action_name = "rest"
+            drive = get_highest_pressure_drive(None, aid)
+            job = BROKER.get_pending_job(aid)
+            if job is None:
+                job = build_cognition_job(aid, a, p, a["tier"], tick_number, drive)
+                if job is not None:
+                    BROKER.submit_job(job)
 
-            if p["messages"]:
-                action_name = "respond_message"
-                result, model_used, llm_called = execute_respond_message(aid, a, p, a["tier"])
-                if result:
-                    action_detail = result
-                    drive = get_highest_pressure_drive(None, aid)
-                    if drive:
-                        fulfill_drive(None, aid, drive["drive_name"], 10)
-                else:
-                    action_name = "rest"
-
-            elif p["tasks"]:
-                action_name = "work_task"
-                result, model_used, llm_called = execute_work_task(aid, a, p, a["tier"])
-                if result:
-                    action_detail = result
-                    drive = get_highest_pressure_drive(None, aid)
-                    if drive:
-                        fulfill_drive(None, aid, drive["drive_name"], 15)
-                else:
-                    action_name = "rest"
-
-            cost = get_cost(action_name)
-            energy_after = update_energy(None, aid, cost)
-
-            if action_name != "rest":
-                active_count += 1
-                if top_actor is None:
-                    top_actor = f"{aid}({action_name})"
-                print(f"  [tick {tick_number}] agent={aid} action={action_name} energy={energy_before:.0f}→{energy_after:.0f} tier={a['tier']}", flush=True)
+            if job is not None:
+                logs.append({
+                    "tick_number": tick_number, "agent_id": aid, "action_taken": "request_cognition",
+                    "action_detail": {"job_id": job.id, "kind": job.kind, "priority": job.priority},
+                    "energy_before": energy_before, "energy_after": energy_before, "tier": a["tier"],
+                    "model_used": None, "llm_called": False,
+                })
             else:
                 idle_count += 1
                 energy_after = update_energy(None, aid, REWARDS["rest"])
-
-            logs.append({
-                "tick_number": tick_number, "agent_id": aid, "action_taken": action_name,
-                "action_detail": action_detail or {}, "energy_before": energy_before,
-                "energy_after": energy_after, "tier": a["tier"],
-                "model_used": model_used, "llm_called": llm_called,
-            })
+                logs.append({
+                    "tick_number": tick_number, "agent_id": aid, "action_taken": "idle",
+                    "action_detail": {}, "energy_before": energy_before,
+                    "energy_after": energy_after, "tier": a["tier"],
+                    "model_used": None, "llm_called": False,
+                })
         else:
             idle_count += 1
             energy_after = update_energy(None, aid, REWARDS["rest"])
+            action_name = "winter_idle" if ecology_state["winter_active"] and has_actionable_items(perceptions[aid]) else "idle"
             logs.append({
-                "tick_number": tick_number, "agent_id": aid, "action_taken": "idle",
-                "action_detail": {}, "energy_before": energy_before,
+                "tick_number": tick_number, "agent_id": aid, "action_taken": action_name,
+                "action_detail": {"winter_active": True} if action_name == "winter_idle" else {}, "energy_before": energy_before,
                 "energy_after": energy_after, "tier": a["tier"],
                 "model_used": None, "llm_called": False,
             })
 
-    # Phase 5: Update tiers based on fitness
+    # Phase 5: Resolve broker work and apply side effects
+    resolved_results = BROKER.process_tick()
+    for result in resolved_results:
+        try:
+            action_detail = execute_cognition_result(result)
+            if not action_detail:
+                continue
+
+            cost = get_cost(result.action_name)
+            energy_before = get_energy(None, result.agent_id)
+            energy_after = update_energy(None, result.agent_id, cost)
+            drive = get_highest_pressure_drive(None, result.agent_id)
+            if drive:
+                fulfill_drive(None, result.agent_id, drive["drive_name"], 10 if result.action_name == "respond_message" else 15)
+
+            active_count += 1
+            if top_actor is None:
+                top_actor = f"{result.agent_id}({result.action_name})"
+            print(
+                f"  [tick {tick_number}] agent={result.agent_id} action={result.action_name} "
+                f"energy={energy_before:.0f}→{energy_after:.0f}",
+                flush=True,
+            )
+            logs.append({
+                "tick_number": tick_number,
+                "agent_id": result.agent_id,
+                "action_taken": result.action_name,
+                "action_detail": action_detail,
+                "energy_before": energy_before,
+                "energy_after": energy_after,
+                "tier": agents[result.agent_id]["tier"],
+                "model_used": result.model_used,
+                "llm_called": result.provider_name != "stub",
+            })
+        except Exception as e:
+            print(f"  [cognition-exec-error] {result.agent_id}: {e}", flush=True)
+
+    # Phase 6: Update tiers based on fitness
     for aid, a in agents.items():
         try:
             fitness_data = api_get(f"/api/fitness/{aid}", {"days": 30})
@@ -347,7 +202,7 @@ def run_tick(tick_number):
         except Exception as e:
             print(f"  [state-update-error] {aid}: {e}", flush=True)
 
-    # Phase 6: Write tick_log (batch)
+    # Phase 7: Write tick_log (batch)
     try:
         api_post("/api/tick-log/batch", {"entries": logs})
     except Exception as e:
@@ -356,7 +211,35 @@ def run_tick(tick_number):
     # Summary
     if not top_actor:
         top_actor = "none"
-    print(f"[tick {tick_number}] active={active_count} idle={idle_count} dormant={dormant_count} | top_actor={top_actor} | budget_used={active_count}/{MAX_ACTIONS}", flush=True)
+    broker_summary = BROKER.get_tick_summary()
+    tick_report = {
+        "tick_number": tick_number,
+        "generated_at": now.isoformat(),
+        "counts": {
+            "active": active_count,
+            "idle": idle_count,
+            "dormant": dormant_count,
+        },
+        "budget": {
+            "max_actions": MAX_ACTIONS,
+            "request_budget": request_budget,
+            "used_actions": active_count,
+            "pending_jobs": broker_summary["pending_jobs"],
+            "cache_entries": broker_summary["cache_entries"],
+        },
+        "top_actor": top_actor,
+        "ecology": ecology_state,
+        "broker": broker_summary,
+        "entries": logs,
+    }
+    report_sink = write_tick_report(tick_report)
+    print(
+        f"[tick {tick_number}] active={active_count} idle={idle_count} dormant={dormant_count} "
+        f"| top_actor={top_actor} | budget_used={active_count}/{MAX_ACTIONS} "
+        f"| pending_jobs={broker_summary['pending_jobs']} cache={broker_summary['cache_entries']} "
+        f"| report={report_sink}",
+        flush=True,
+    )
 
 
 def main():
