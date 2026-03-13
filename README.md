@@ -357,6 +357,96 @@ The repository is transitioning from an early prototype implementation to a **na
 
 Legacy components may be removed as the Lisp architecture stabilizes.
 
+## Common Lisp Runtime
+
+The `lisp/` directory now contains an ASDF system (`lisp/af64.asd`) that recreates the AF64 tick engine, cognition broker, action planner, perception stack, and energy/drive models in Common Lisp. The runtime favors SBCL on Linux/macOS servers and only depends on the host providing:
+
+- `curl` for HTTP egress to the existing Rust API
+- `python3` (optional) for persona preprocessing scripts
+- Access to the AF64 API endpoints already served today
+
+### Loading the system
+
+```
+cd lisp
+sbcl --eval '(require :asdf)' \
+     --eval '(asdf:load-system :af64)' \
+     --eval '(af64:run-tick 1)' \
+     --quit
+```
+
+Modules mirror the prior Python files:
+
+| Lisp module | Former Python file | Notes |
+|-------------|--------------------|-------|
+| `runtime/action-planner.lisp` | `action_planner.py` | Deterministic cognition job planning with persona cache |
+| `runtime/action-executor.lisp` | `action_executor.py` | Applies cognition results back to the API |
+| `runtime/perception.lisp` | `perception.py` | Tier-aware substrate scans |
+| `runtime/drive.lisp` | `drive_model.py` | Drive ticking + pressure queries |
+| `runtime/energy.lisp` | `energy.py` | Energy economy helpers |
+| `runtime/tick-engine.lisp` | `tick_engine.py` | Tick orchestrator (currently wired for request scheduling) |
+
+`runtime/self-mod.lisp` introduces mutable behavior registries so ghosts can redefine their own planners mid-flight, satisfying the self-rewrite requirement. Additional modules (`runtime/cognition-broker.lisp`, `runtime/tick-reporting.lisp`) provide extensible stubs for cognition providers and persistence while keeping the old API contract intact.
+
+See `PROJECT_NOOSPHERE_GHOSTS.md` for the long-form architecture notes.
+
+> **Note:** The legacy Python engine has been fully retired. All operational code now lives under `lisp/`, so the previous `.py` files and pytest scaffolding are gone.
+
+### Configuring LLM providers
+
+LLM selection is now fully data-driven so you can point the broker at any chat-completions style API and inject whatever key you have on hand.
+
+- `COGNITION_PROVIDER_CONFIG` (optional) — JSON array describing one or more HTTP providers. Each object supports:
+  - `name` – label used in telemetry/logs.
+  - `type` – currently `http`.
+  - `base_url` – chat completions endpoint (e.g. `https://api.openai.com/v1/chat/completions`).
+  - `key_env` – name of the environment variable holding the API key. If omitted, the broker falls back to `COGNITION_API_KEY_ENV`, then `VENICE_API_KEY`.
+  - `auth_header` / `auth_template` – how to inject the key. Include `{key}` in the template to substitute the secret (default `Bearer {key}`).
+  - `max_tokens` – per-request budget (default `512`).
+  - `models` – per-tier model map (`{"prime":"gpt-4o","working":"gpt-4o-mini","base":"gpt-4o-mini"}`).
+  - `headers` – optional extra headers (`[{"name":"OpenAI-Beta","value":"assistants=v2"}]`).
+- `COGNITION_MODEL_MAP` (optional) — JSON object applied to every provider that fills in missing tier→model mappings.
+- `COGNITION_API_KEY_ENV` (optional) — default env var to read when a provider omits `key_env`.
+
+Example:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export COGNITION_PROVIDER_CONFIG='[
+  {
+    "name": "openai",
+    "type": "http",
+    "base_url": "https://api.openai.com/v1/chat/completions",
+    "key_env": "OPENAI_API_KEY",
+    "max_tokens": 800,
+    "models": {"prime":"gpt-4o","working":"gpt-4o-mini","base":"gpt-4o-mini"}
+  }
+]'
+
+You can also point `COGNITION_PROVIDER_CONFIG` at a file by prefixing the path with `@` (e.g., `COGNITION_PROVIDER_CONFIG=@config/provider-config.json`); the runtime will read and parse that file on startup.
+```
+
+### Guided onboarding
+
+To make first-time setup easier, run the interactive installer:
+
+```bash
+sbcl --eval '(require :asdf)' \
+     --eval '(asdf:load-system :af64)' \
+     --script lisp/tools/onboard.lisp
+```
+
+The wizard will:
+
+1. Collect your DPN API URL/key and optionally test connectivity.
+2. Let you link your personal wiki handle (e.g., `[[NathanEckenrode]]`) to an EM Staff profile straight from the database (`AF64_PRIMARY_USER_HANDLE`, `AF64_PRIMARY_USER_ID`, `AF64_PRIMARY_USER_NAME`), so ghosts can resolve that reference without a persona file.
+3. Ask where your ghost persona files live, let you map specific agents to those files, and remember the mapping (`AF64_PERSONA_DIR`, `AF64_PERSONA_MAP_FILE`).
+3. Let you choose where persistent memories should land (e.g., `vault_notes` daily layer) via `AF64_MEMORY_TABLE` / `AF64_MEMORY_LAYER`.
+4. Walk through adding one or more LLM providers (base URL, auth header/template, per-tier models) and generate a `config/provider-config.json` that the runtime loads automatically (referenced as `COGNITION_PROVIDER_CONFIG=@config/provider-config.json`).
+5. Emit a ready-to-source `config/af64.env` that exports every variable chosen above.
+
+After it finishes, run `source config/af64.env` before launching the tick engine so the runtime picks up your API credentials, persona mapping, and provider settings.
+
 ---
 
 # Guiding Principle
@@ -374,4 +464,3 @@ Noosphere Ghosts animates them.
 # License
 
 MIT
-
