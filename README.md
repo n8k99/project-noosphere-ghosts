@@ -1,4 +1,3 @@
-```markdown
 # Noosphere Ghosts
 ## AF64 Artificial Life Engine
 
@@ -374,5 +373,5 @@ Noosphere Ghosts animates them.
 
 # License
 
-TBD
-```
+MIT
+
