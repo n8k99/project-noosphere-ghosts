@@ -25,6 +25,7 @@
                  (:file "energy")
                  (:file "action-planner")
                  (:file "action-executor")
+                 (:file "tool-socket")
                  (:file "empirical-rollups")
                  (:file "tick-reporting")
                  (:file "tick-engine")))

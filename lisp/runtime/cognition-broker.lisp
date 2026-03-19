@@ -147,7 +147,7 @@
      :request-budget budget
      :pending-threshold (cognition-broker-winter-pending-threshold broker)
      :thaw-pending-threshold (cognition-broker-thaw-pending-threshold broker)
-     :thaw-ready-ticks (cognition-broker-thaw-ready-ticks broker)))
+     :thaw-ready-ticks (cognition-broker-thaw-ready-ticks broker))))
 
 (defun refresh-ecology-state (broker)
   (let ((frontier (frontier-enabled-p))
@@ -163,6 +163,10 @@
         (record-event broker (if (gethash :winter-active ecology) "winter_enter" "winter_exit")
                       :ecology ecology))
       ecology)))
+
+(defun broker-get-pending-job (broker agent-id)
+  "Return the pending job for AGENT-ID, or NIL if none."
+  (gethash agent-id (cognition-broker-pending-by-agent broker)))
 
 (defun enqueue-job (broker job)
   (setf (cognition-broker-pending-jobs broker)
@@ -191,7 +195,7 @@
                         :provider-name (cognition-result-provider-name cached-result)
                         :model-used (cognition-result-model-used cached-result)
                         :cached t
-                        :metadata (copy-hash-table (cognition-result-metadata cached-result)))))
+                        :metadata (cognition-job-input-context job))))
            (setf (cognition-job-status job) "resolved"
                  (cognition-job-provider-name job) (cognition-result-provider-name ready)
                  (cognition-job-result job) (result->plist ready)
@@ -293,7 +297,7 @@
         (setf (gethash :processed-budget (cognition-broker-last-tick-metrics broker)) processed)
         (setf (cognition-broker-pending-jobs broker) (nreverse retained))
         (broker-save-state broker)
-        (nreverse results))))))
+        (nreverse results)))))
 
 (defun broker-save-state (broker)
   (ensure-runtime-dir)
@@ -380,3 +384,4 @@
      :metrics metrics
      :ecology (broker-ecology-state broker)
      :recent-events (coerce recent 'vector))))
+)

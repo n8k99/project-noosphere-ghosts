@@ -1,0 +1,31 @@
+[
+  {
+    "name": "anthropic",
+    "type": "anthropic",
+    "base_url": "http://127.0.0.1:18789/proxy/anthropic/v1/messages",
+    "key_env": "OPENCLAW_GATEWAY_PASS",
+    "auth_header": "Authorization",
+    "auth_template": "Bearer {key}",
+    "max_tokens": 800,
+    "headers": [
+      {
+        "name": "anthropic-version",
+        "value": "2023-06-01"
+      },
+      {
+        "name": "anthropic-beta",
+        "value": "claude-code-20250219,oauth-2025-04-20"
+      },
+      {
+        "name": "Content-Type",
+        "value": "application/json"
+      }
+    ],
+    "models": {
+      "opus": "claude-opus-4-20250514",
+      "prime": "claude-sonnet-4-20250514",
+      "working": "claude-sonnet-4-20250514",
+      "base": "claude-3-haiku-20240307"
+    }
+  }
+]

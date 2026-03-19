@@ -50,16 +50,16 @@
       (error () nil))))
 
 (defun generate-uuid ()
-  (let* ((parts #(8 4 4 4 12))
+  (let* ((parts (list 8 4 4 4 12))
          (last-index (1- (length parts))))
     (string-downcase
      (with-output-to-string (out)
-       (loop for part across parts
+       (loop for part in parts
              for idx from 0
-             do (loop repeat part do
-                      (write-char (digit-char (random 16) 16) out))
+             do (loop repeat part
+                      do (write-char (digit-char (random 16) 16) out))
                 (when (< idx last-index)
-                  (write-char #\- out))))))
+                  (write-char #\- out)))))))
 
 (defun clone-hash-table (table)
   (let ((copy (make-hash-table :test (hash-table-test table))))
@@ -81,7 +81,7 @@
                        (retry-count 0)
                        (max-attempts 3)
                        (wait-ticks 0)
-                       (id (generate-uuid))))))
+                       (id (generate-uuid)))))
   (id nil :type (or null string))
   (agent-id nil :type (or null string))
   (tick-number 0 :type integer)
@@ -109,7 +109,7 @@
                  (&key job-id agent-id action-name content provider-name
                        model-used (cached nil)
                        (metadata (make-hash-table :test #'equal))
-                       (created-at (utc-now-iso))))))
+                       (created-at (utc-now-iso)))))
   (job-id nil)
   (agent-id nil)
   (action-name "")

@@ -1,9 +1,9 @@
 (in-package :af64.runtime.provider-adapters)
 
 (defparameter *default-tier-models*
-  '((:prime . "claude-sonnet-4-6")
-    (:working . "claude-sonnet-4-5")
-    (:base . "llama-3.3-70b")))
+  '((:prime . "claude-sonnet-4-20250514")
+    (:working . "claude-sonnet-4-20250514")
+    (:base . "claude-3-haiku-20240307")))
 
 (defun read-json-from-source (value)
   (cond
@@ -58,6 +58,12 @@
    (max-tokens :initarg :max-tokens :initform 512 :reader provider-max-tokens)
    (extra-headers :initarg :extra-headers :initform '() :reader provider-extra-headers)))
 
+(defclass anthropic-provider (provider-adapter)
+  ((base-url :initarg :base-url :initform "https://api.anthropic.com/v1/messages" :reader provider-base-url)
+   (key-env :initarg :key-env :initform "ANTHROPIC_API_KEY" :reader provider-key-env)
+   (model-map :initarg :model-map :reader provider-model-map)
+   (max-tokens :initarg :max-tokens :initform 800 :reader provider-max-tokens)))
+
 (defclass stub-adapter (provider-adapter) ())
 
 (defun cfg-value (cfg &rest keys)
@@ -79,13 +85,11 @@
 
 (defun default-provider-config ()
   (list (json-object
-         :name "venice"
-         :type "http"
-         :base_url "https://api.venice.ai/api/v1/chat/completions"
-         :key_env "VENICE_API_KEY"
-         :auth_header "Authorization"
-         :auth_template "Bearer {key}"
-         :max_tokens 512)))
+         :name "anthropic"
+         :type "anthropic"
+         :base_url "https://api.anthropic.com/v1/messages"
+         :key_env "ANTHROPIC_API_KEY"
+         :max_tokens 800)))
 
 (defun ensure-model-map (provider-overrides)
   (make-model-map provider-overrides *global-model-overrides*))
@@ -93,7 +97,7 @@
 (defun build-http-provider (cfg)
   (let* ((name (or (cfg-value cfg :name) "http"))
          (base-url (or (cfg-value cfg :base-url :base_url) "https://api.openai.com/v1/chat/completions"))
-         (key-env (or (cfg-value cfg :key-env :key_env) (uiop:getenv "COGNITION_API_KEY_ENV") "VENICE_API_KEY"))
+         (key-env (or (cfg-value cfg :key-env :key_env) (uiop:getenv "COGNITION_API_KEY_ENV") "ANTHROPIC_API_KEY"))
          (auth-header (or (cfg-value cfg :auth-header :auth_header) "Authorization"))
          (auth-template (or (cfg-value cfg :auth-template :auth_template) "Bearer {key}"))
          (max-tokens (or (cfg-value cfg :max-tokens :max_tokens) 512))
@@ -110,12 +114,28 @@
                    :max-tokens max-tokens
                    :extra-headers headers)))
 
+(defun build-anthropic-provider (cfg)
+  (let* ((name (or (cfg-value cfg :name) "anthropic"))
+         (base-url (or (cfg-value cfg :base-url :base_url) "https://api.anthropic.com/v1/messages"))
+         (key-env (or (cfg-value cfg :key-env :key_env) "ANTHROPIC_API_KEY"))
+         (max-tokens (or (cfg-value cfg :max-tokens :max_tokens) 800))
+         (model-overrides (cfg-value cfg :models :model_map))
+         (model-map (ensure-model-map model-overrides)))
+    (make-instance 'anthropic-provider
+                   :name name
+                   :base-url base-url
+                   :key-env key-env
+                   :model-map model-map
+                   :max-tokens max-tokens)))
+
 (defun build-provider-adapters ()
   (let ((configs (or (load-provider-configs) (default-provider-config)))
         (instances '()))
     (dolist (cfg configs)
       (let ((type (string-downcase (or (cfg-value cfg :type) "http"))))
         (cond
+          ((string= type "anthropic")
+           (push (build-anthropic-provider cfg) instances))
           ((string= type "http")
            (push (build-http-provider cfg) instances)))))
     (push (make-instance 'stub-adapter :name "stub") instances)
@@ -177,7 +197,42 @@
                  :action-name (cognition-job-action-name job)
                  :content content
                  :provider-name (provider-name adapter)
-                 :model-used (tier-model adapter job))))))))))
+                 :model-used (tier-model adapter job)
+                 :metadata (cognition-job-input-context job))))))))))
+
+(defmethod provider-generate ((adapter anthropic-provider) job)
+  "Route all cognition through the OpenClaw gateway module."
+  (let* ((context (cognition-job-input-context job))
+         (system-prompt (or (gethash :system-prompt context) ""))
+         (user-messages (%vector->list (gethash :messages context)))
+         (non-system-messages
+           (remove-if (lambda (m)
+                        (and (hash-table-p m)
+                             (string= (or (gethash :role m) "") "system")))
+                      user-messages))
+         (final-messages (if (null non-system-messages)
+                             (list (json-object :role "user" :content "Continue."))
+                             non-system-messages))
+         (tier (cognition-job-requested-model-tier job))
+         (model (model-for-tier (cond
+                                  ((string= tier "prime") :prime)
+                                  ((string= tier "working") :working)
+                                  (t :base))))
+         (content (gateway-complete system-prompt final-messages
+                                    :tier (cond
+                                            ((string= tier "prime") :prime)
+                                            ((string= tier "working") :working)
+                                            (t :base))
+                                    :max-tokens (provider-max-tokens adapter))))
+    (when content
+      (make-cognition-result
+       :job-id (cognition-job-id job)
+       :agent-id (cognition-job-agent-id job)
+       :action-name (cognition-job-action-name job)
+       :content content
+       :provider-name "openclaw-gateway"
+       :model-used model
+       :metadata (cognition-job-input-context job)))))
 
 (defmethod provider-generate ((adapter stub-adapter) job)
   (let* ((context (cognition-job-input-context job))
@@ -203,7 +258,7 @@
      :content content
      :provider-name (provider-name adapter)
      :model-used "deterministic-fallback"
-     :metadata (json-object :fallback t))))
+     :metadata (cognition-job-input-context job))))
 
 (defun build-default-provider-chain ()
   (build-provider-adapters))

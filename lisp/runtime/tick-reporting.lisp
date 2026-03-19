@@ -12,6 +12,6 @@
                                 :if-exists :append
                                 :if-does-not-exist :create)
           (write-string (encode-json report) stream)
-          (write-char #\Newline stream)))))
+          (write-char #\Newline stream))))
     (ignore-errors (rebuild-rollups))
     sink))

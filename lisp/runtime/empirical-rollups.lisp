@@ -169,7 +169,7 @@
                                                :note "Application-specific synthesis can be layered on top of this empirical record."))
                rollups)))
      grouped)
-    (sort rollups #'string< :key (lambda (row) (gethash :date row))))
+    (sort rollups #'string< :key (lambda (row) (gethash :date row)))))
 
 (defun build-higher-rollups (items key-fn winter-field label-key)
   (let ((grouped (make-hash-table :test #'equal))
@@ -195,7 +195,7 @@
                                                :note "Application-specific synthesis can be layered on top of this empirical record."))
                result)))
      grouped)
-    (sort result #'string< :key (lambda (row) (gethash label-key row))))
+    (sort result #'string< :key (lambda (row) (gethash label-key row)))))
 
 (defun build-weekly-rollups (daily)
   (let ((grouped (make-hash-table :test #'equal)))
