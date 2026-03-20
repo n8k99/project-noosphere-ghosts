@@ -26,7 +26,7 @@
     (cond
       ((hash-table-p profile)
        (or (gethash :agent profile) profile))
-      (t nil)))
+      (t nil))))
 
 (defun primary-user-note ()
   (let ((agent (primary-user-agent-record)))

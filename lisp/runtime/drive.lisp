@@ -21,3 +21,4 @@
              :satisfaction (or (gethash :satisfaction top) 50)
              :frustration (or (gethash :frustration top) 0)))))
     (error () nil))
+)

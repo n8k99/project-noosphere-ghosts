@@ -24,5 +24,7 @@
   (and value (vectorp value) (> (length value) 0)))
 
 (defun has-actionable-items (perception)
+  "Only messages, requests, and PIPELINE tasks are actionable. No proactive work."
   (or (vector-non-empty-p (gethash :messages perception))
+      (vector-non-empty-p (gethash :requests perception))
       (vector-non-empty-p (gethash :tasks perception))))

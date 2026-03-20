@@ -1,0 +1,340 @@
+{
+  "tools": {
+    "query_db": {
+      "script": null,
+      "command": "sudo -u postgres psql -d master_chronicle -t -c",
+      "description": "Run a read-only SQL query against master_chronicle. Returns text results.",
+      "parameters": {
+        "sql": "SQL query string (SELECT only)"
+      },
+      "scope": [
+        "engineering",
+        "tools",
+        "specs",
+        "market",
+        "analytics",
+        "reporting",
+        "research",
+        "scheduling",
+        "tracking",
+        "builder"
+      ],
+      "dangerous": false
+    },
+    "write_document": {
+      "script": null,
+      "command": null,
+      "description": "Write a document (spec, design, review) to the documents table. Content is persisted as a real DB record.",
+      "parameters": {
+        "path": "Document path (e.g. Projects/Noosphere Ghosts/Tooling/tool_name/spec.md)",
+        "title": "Document title",
+        "content": "Full markdown content"
+      },
+      "scope": [
+        "engineering",
+        "tools",
+        "specs",
+        "builder",
+        "content",
+        "writing"
+      ],
+      "dangerous": false,
+      "special_handler": "write_document"
+    },
+    "build_tool": {
+      "script": "/opt/project-noosphere-ghosts/tools/tool-builder.sh",
+      "description": "Build a Python tool from a specification. Spawns Claude Code to write actual files to ~/gotcha-workspace/tools/<tool_name>/",
+      "parameters": {
+        "tool_name": "Name of the tool (snake_case)",
+        "spec": "Full specification text"
+      },
+      "scope": [
+        "engineering",
+        "tools",
+        "builder"
+      ],
+      "dangerous": false
+    },
+    "list_tasks": {
+      "script": "/root/gotcha-workspace/tools/engineering/list_unassigned_tasks.py",
+      "description": "List open tasks, optionally filtered by assignee or department.",
+      "parameters": {
+        "assignee": "Optional agent_id filter",
+        "department": "Optional department filter"
+      },
+      "scope": [
+        "engineering",
+        "tools",
+        "scheduling",
+        "tracking"
+      ],
+      "dangerous": false
+    },
+    "assign_task": {
+      "script": "/root/gotcha-workspace/tools/engineering/assign_task.py",
+      "description": "Assign a task to an agent. Cannot assign to nathan.",
+      "parameters": {
+        "task_id": "Task ID (integer)",
+        "assignee": "Agent ID to assign to"
+      },
+      "scope": [
+        "engineering",
+        "scheduling",
+        "tracking"
+      ],
+      "dangerous": false
+    },
+    "search_documents": {
+      "script": "/root/gotcha-workspace/tools/memory/hybrid_search.py",
+      "description": "Search documents using keyword + vector similarity. Returns matching document excerpts. Call with: {\"tool\": \"search_documents\", \"args\": {\"query\": \"your search terms\"}}",
+      "parameters": {
+        "query": "Search query text (positional, passed directly)"
+      },
+      "scope": [
+        "engineering",
+        "tools",
+        "content",
+        "research",
+        "market",
+        "analytics",
+        "writing",
+        "music",
+        "specs"
+      ],
+      "dangerous": false,
+      "positional_arg": "query"
+    },
+    "write_tool_spec": {
+      "script": "/root/gotcha-workspace/tools/engineering/write_tool_spec.py",
+      "description": "Write a tool specification document to disk and DB.",
+      "parameters": {
+        "tool_name": "Tool name (snake_case)",
+        "spec_content": "Full spec markdown"
+      },
+      "scope": [
+        "engineering",
+        "tools",
+        "specs"
+      ],
+      "dangerous": false
+    },
+    "security_review": {
+      "script": "/root/gotcha-workspace/tools/engineering/security_review.py",
+      "description": "Run automated security checks on a tool's source code.",
+      "parameters": {
+        "tool_name": "Tool to review"
+      },
+      "scope": [
+        "engineering",
+        "tools",
+        "specs"
+      ],
+      "dangerous": false
+    },
+    "run_tool_tests": {
+      "script": "/root/gotcha-workspace/tools/engineering/run_tool_tests.py",
+      "description": "Run test suite for a built tool.",
+      "parameters": {
+        "tool_name": "Tool to test"
+      },
+      "scope": [
+        "engineering",
+        "tools"
+      ],
+      "dangerous": false
+    },
+    "deploy_tool": {
+      "script": "/root/gotcha-workspace/tools/engineering/deploy_tool.py",
+      "description": "Deploy a tool: add to manifest, verify imports, register.",
+      "parameters": {
+        "tool_name": "Tool to deploy"
+      },
+      "scope": [
+        "engineering",
+        "tools"
+      ],
+      "dangerous": false
+    },
+    "lookup_agents": {
+      "script": "/root/gotcha-workspace/tools/engineering/lookup_agents.py",
+      "description": "Look up agent details: role, department, energy, tool_scope.",
+      "parameters": {
+        "agent_id": "Optional specific agent to look up"
+      },
+      "scope": [
+        "engineering",
+        "scheduling",
+        "tracking",
+        "reporting"
+      ],
+      "dangerous": false
+    },
+    "read_schedule": {
+      "script": "/root/gotcha-workspace/tools/engineering/read_schedule.py",
+      "description": "Read upcoming events from the events table.",
+      "parameters": {
+        "days": "Number of days ahead to check (default 7)"
+      },
+      "scope": [
+        "scheduling",
+        "tracking",
+        "reporting"
+      ],
+      "dangerous": false
+    },
+    "delegate_investment": {
+      "script": "/root/gotcha-workspace/tools/investment/delegate_investment.py",
+      "description": "Create an investment pipeline goal with 6 stage tasks (thesis\u2192research\u2192analysis\u2192compliance\u2192documentation\u2192approval). Assigns to the investment team.",
+      "parameters": {
+        "description": "What to investigate/trade",
+        "tool_name": "Optional slug override"
+      },
+      "scope": [
+        "strategy",
+        "kalshi",
+        "trading",
+        "market",
+        "portfolio"
+      ],
+      "dangerous": false
+    },
+    "delegate_editorial": {
+      "script": "/root/gotcha-workspace/tools/editorial/delegate_editorial.py",
+      "description": "Create an editorial pipeline goal with 7 stage tasks (collection\u2192research\u2192curation\u2192composition\u2192editing\u2192polish\u2192publish). Assigns to Sylvia's editorial team.",
+      "parameters": {
+        "description": "Editorial task description",
+        "slug": "Optional slug override"
+      },
+      "scope": [
+        "content",
+        "brand",
+        "social",
+        "publishing"
+      ],
+      "dangerous": false
+    },
+    "trade_executor": {
+      "script": "/root/gotcha-workspace/tools/trade_executor/trade_executor.py",
+      "description": "Execute trades on Kalshi. Supports paper and live mode. Actions: scan, trade, close, status, journal.",
+      "parameters": {
+        "action": "scan|trade|close|status|journal"
+      },
+      "positional_arg": "action",
+      "scope": [
+        "trading",
+        "kalshi",
+        "market",
+        "portfolio"
+      ],
+      "dangerous": true
+    },
+    "thesis_writer": {
+      "script": "/root/gotcha-workspace/tools/thesis_writer/thesis_writer.py",
+      "description": "Generate investment thesis for a market or contract. Researches and produces structured thesis document.",
+      "parameters": {
+        "topic": "Market topic or contract to analyze"
+      },
+      "positional_arg": "topic",
+      "scope": [
+        "strategy",
+        "research",
+        "market",
+        "trading"
+      ],
+      "dangerous": false
+    },
+    "market_scanner": {
+      "script": "/root/gotcha-workspace/tools/market_scanner/market_pulse.py",
+      "description": "Scan markets for momentum signals. Covers stocks, crypto, commodities via free APIs.",
+      "parameters": {
+        "mode": "scan|report"
+      },
+      "positional_arg": "mode",
+      "scope": [
+        "market",
+        "trading",
+        "scanning",
+        "signals"
+      ],
+      "dangerous": false
+    },
+    "market_data": {
+      "script": "/root/gotcha-workspace/tools/market_data/market_data.py",
+      "description": "Fetch market data from Yahoo Finance, CoinGecko, and other free APIs. Returns price, volume, momentum indicators.",
+      "parameters": {
+        "symbol": "Ticker or asset symbol",
+        "source": "yahoo|coingecko"
+      },
+      "scope": [
+        "market",
+        "trading",
+        "research",
+        "scanning"
+      ],
+      "dangerous": false
+    },
+    "news_aggregator": {
+      "script": "/root/gotcha-workspace/tools/news_aggregator/news_aggregator.py",
+      "description": "Aggregate news from RSS feeds and APIs. Classify by topic and sentiment using Ollama.",
+      "parameters": {
+        "action": "fetch|classify|report"
+      },
+      "positional_arg": "action",
+      "scope": [
+        "research",
+        "market",
+        "signals",
+        "feeds"
+      ],
+      "dangerous": false
+    },
+    "delegate_modular_fortress": {
+      "script": "/root/gotcha-workspace/tools/modular_fortress/delegate_modular_fortress.py",
+      "description": "Create a Modular Fortress diamond pipeline (discovery\u2192security track + modularity track). Carmen Delgado's cross-department delegation.",
+      "parameters": {
+        "description": "What to analyze/refactor",
+        "slug": "Optional slug override"
+      },
+      "scope": [
+        "cross_functional",
+        "engineering",
+        "legal",
+        "security"
+      ],
+      "dangerous": false
+    },
+    "read_own_memory": {
+      "script": "/root/gotcha-workspace/tools/engineering/read_own_memory.py",
+      "command": null,
+      "description": "Read your own memory entries from daily notes. Returns your memories from today and yesterday. Use at start of work to recall what you did previously.",
+      "parameters": {
+        "agent_id": {
+          "type": "string",
+          "description": "Your agent ID",
+          "required": true
+        }
+      },
+      "scope": "*",
+      "interpreter": "/root/gotcha-workspace/.venv/bin/python3"
+    },
+    "write_own_memory": {
+      "script": "/root/gotcha-workspace/tools/engineering/write_own_memory.py",
+      "command": null,
+      "description": "Save a memory/insight/decision to your daily note column. Your future self will see this tomorrow.",
+      "parameters": {
+        "agent_id": {
+          "type": "string",
+          "description": "Your agent ID",
+          "required": true
+        },
+        "memory_text": {
+          "type": "string",
+          "description": "What to remember (max 500 chars)",
+          "required": true
+        }
+      },
+      "scope": "*",
+      "interpreter": "/root/gotcha-workspace/.venv/bin/python3"
+    }
+  }
+}

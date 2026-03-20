@@ -14,10 +14,9 @@
 
 (defun encode-query (params)
   (let ((pairs (normalize-params params)))
-    (uiop:join-string
+    (format nil "~{~a~^&~}"
      (loop for (k . v) in pairs collect
-           (format nil "~a=~a" (url-encode (keyword->json-key k)) (url-encode (format-value v))))
-     :separator "&")))
+           (format nil "~a=~a" (url-encode (keyword->json-key k)) (url-encode (format-value v)))))))
 
 (defun normalize-params (params)
   (cond
@@ -36,7 +35,7 @@
       (loop for ch across str do
             (if (find ch safe)
                 (write-char ch out)
-                (format out "%%%02X" (char-code ch)))))))
+                (format out "%~2,'0X" (char-code ch)))))))
 
 (defun format-value (value)
   (cond
@@ -69,6 +68,14 @@
       (http-post (build-url path)
                  (encode-json payload)
                  :headers (default-headers))
+    (declare (ignore stderr))
+    (parse-response body status)))
+
+(defun api-put (path payload)
+  (multiple-value-bind (body status stderr)
+      (http-put (build-url path)
+                (encode-json payload)
+                :headers (default-headers))
     (declare (ignore stderr))
     (parse-response body status)))
 

@@ -6,7 +6,7 @@
     (uiop:ensure-directory-pathname dir)))
 
 (defun ensure-runtime-dir ()
-  (uiop:ensure-directories-exist (runtime-directory)))
+  (uiop:ensure-all-directories-exist (list (runtime-directory))))
 
 (defun %make-runtime-path (filename)
   (namestring (merge-pathnames filename (runtime-directory))))

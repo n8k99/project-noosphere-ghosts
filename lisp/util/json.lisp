@@ -56,7 +56,7 @@
 (defun skip-whitespace (text index)
   (loop while (< index (length text))
         for ch = (char text index)
-        when (find ch " \t\n\r")
+        when (member ch '(#\Space #\Tab #\Newline #\Return))
           do (incf index)
         else
           do (return index)
@@ -70,7 +70,7 @@
           do (cond
                ((char= ch #\")
                 (incf index)
-                (return (values (get-output-stream-string buffer) index)))
+                (return-from parse-json-string (values (get-output-stream-string buffer) index)))
                ((char= ch #\\)
                 (incf index)
                 (when (>= index (length text))
@@ -104,9 +104,9 @@
 
 (defun hex-digit (ch)
   (cond
-    ((<= #\0 ch #\9) (- (char-code ch) (char-code #\0)))
-    ((<= #\a ch #\f) (+ 10 (- (char-code ch) (char-code #\a))))
-    ((<= #\A ch #\F) (+ 10 (- (char-code ch) (char-code #\A))))
+    ((char<= #\0 ch #\9) (- (char-code ch) (char-code #\0)))
+    ((char<= #\a ch #\f) (+ 10 (- (char-code ch) (char-code #\a))))
+    ((char<= #\A ch #\F) (+ 10 (- (char-code ch) (char-code #\A))))
     (t (error "Invalid hex digit: ~a" ch))))
 
 (defun parse-json-number (text index)
@@ -127,7 +127,7 @@
     (let ((number (read-from-string text nil nil :start start :end index)))
       (unless number
         (error "Invalid JSON number starting at ~a" start))
-      (values number index)))
+      (values number index))))
 
 (defun consume-digits (text index)
   (loop while (and (< index (length text)) (digit-char-p (char text index)))
@@ -147,15 +147,15 @@
               (parse-json-value text index)
             (push value items)
             (setf index (skip-whitespace text next-index))
+            (setf index (skip-whitespace text next-index))
             (cond
               ((and (< index (length text)) (char= (char text index) #\,))
                (incf index)
-               (setf index (skip-whitespace text index))
-               (continue))
+               (setf index (skip-whitespace text index)))
               ((and (< index (length text)) (char= (char text index) #\]))
                (incf index)
-               (return (values (coerce (nreverse items) 'vector) index)))
-              (t (error "Expected , or ] in array")))))))
+               (return-from parse-json-array (values (coerce (nreverse items) 'vector) index)))
+              (t (error "Expected , or ] in array"))))))))
 
 (defun parse-json-object (text index)
   (incf index) ; skip {
@@ -180,7 +180,7 @@
              (setf index (skip-whitespace text index)))
             ((and (< index (length text)) (char= (char text index) #\}))
              (incf index)
-             (return (values table index)))
+             (return-from parse-json-object (values table index)))
             (t (error "Expected , or } in object"))))))))
 
 (defun starts-with (text index expected)
