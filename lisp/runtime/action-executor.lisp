@@ -300,8 +300,15 @@
               ;; If done, also mark the parent goal task as done
               (when (and (string-equal next-stage "done") goal-id)
                 (handler-case
-                    (api-patch (format nil "/api/af64/tasks/~a" goal-id)
-                               (json-object :status "done" :stage "done"))
+                    (progn
+                      (api-patch (format nil "/api/af64/tasks/~a" goal-id)
+                                 (json-object :status "done" :stage "done"))
+                      ;; Check for recurrence on the goal task — reschedule if recurring
+                      (let ((goal-data (handler-case
+                                           (api-get (format nil "/api/af64/tasks/~a" goal-id))
+                                         (error () nil))))
+                        (when (and goal-data (hash-table-p goal-data))
+                          (handle-task-recurrence goal-id goal-data))))
                   (error () nil))))
           (error (e) (format t "  [pipeline-advance-error] ~a: ~a~%" task-id e)))))))
 
@@ -558,6 +565,12 @@
             (api-patch (format nil "/api/af64/tasks/~a" task-id)
                        (json-object :status "done"))
             (format t "  [complete] ~a marked task #~a done~%" agent-id task-id)
+            ;; Check for recurrence — reschedule if recurring
+            (let ((task-data (handler-case
+                                 (api-get (format nil "/api/af64/tasks/~a" task-id))
+                               (error () nil))))
+              (when (and task-data (hash-table-p task-data))
+                (handle-task-recurrence task-id task-data)))
             (incf count))
         (error (e) (format t "  [complete-error] task #~a: ~a~%" task-id e))))
     count))

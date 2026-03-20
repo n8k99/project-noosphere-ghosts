@@ -24,6 +24,7 @@
                  (:file "drive")
                  (:file "energy")
                  (:file "action-planner")
+                 (:file "task-scheduler")
                  (:file "action-executor")
                  (:file "tool-socket")
                  (:file "empirical-rollups")

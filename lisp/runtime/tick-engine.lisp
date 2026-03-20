@@ -72,15 +72,23 @@
 ;;; --- Phase 1: Perceive all agents ---
 
 (defun phase-perceive (agents now)
-  "Return (perceptions . agent-map) hash tables."
+  "Return (perceptions . agent-map) hash tables.
+   Filters out tasks whose scheduled_at is in the future."
   (let ((perceptions (make-hash-table :test #'equal))
-        (agent-map (make-hash-table :test #'equal)))
+        (agent-map (make-hash-table :test #'equal))
+        (now-universal (get-universal-time)))
     (dolist (agent agents)
       (let* ((aid (gethash :id agent))
              (tier (gethash :tier agent))
              (last-tick (or (gethash :last-tick-at agent) "2026-01-01T00:00:00Z")))
         (handler-case
-            (setf (gethash aid perceptions) (perceive aid tier last-tick))
+            (let ((perception (perceive aid tier last-tick)))
+              ;; Filter out tasks that aren't ready yet (scheduled_at in the future)
+              (let ((tasks (gethash :tasks perception)))
+                (when (and tasks (> (length tasks) 0))
+                  (setf (gethash :tasks perception)
+                        (filter-scheduled-tasks tasks now-universal))))
+              (setf (gethash aid perceptions) perception))
           (error (e)
             (format t "  [perceive-err] ~a: ~a~%" aid e)
             (setf (gethash aid perceptions) (af64.runtime.perception:empty-perception))))
@@ -109,7 +117,15 @@
              (msg-boost (if (and msgs (> (length msgs) 0)) 50 0))
              (req-boost (if (and reqs (> (length reqs) 0)) 40 0))
              (task-boost (if (and tasks (> (length tasks) 0)) 25 0))
-             (urgency (+ (* pressure (/ energy 100.0)) msg-boost req-boost task-boost)))
+             ;; Deadline urgency: boost up to +50 for tasks approaching their deadline
+             (deadline-boost (if (and tasks (> (length tasks) 0))
+                                 (let ((now-ut (get-universal-time)))
+                                   (reduce #'max (map 'list
+                                                      (lambda (tk) (deadline-urgency-boost tk now-ut))
+                                                      tasks)
+                                           :initial-value 0))
+                                 0))
+             (urgency (+ (* pressure (/ energy 100.0)) msg-boost req-boost task-boost deadline-boost)))
         (when drive (setf (gethash aid drives) drive))
         (push (list aid urgency) rankings)))
     (setf rankings (sort rankings #'> :key #'second))

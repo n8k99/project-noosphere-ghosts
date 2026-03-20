@@ -40,6 +40,7 @@
   (:import-from :af64.runtime.self-mod :define-ghost-behavior)
   (:export :cognition-job :make-cognition-job :cognition-result :make-cognition-result
            :job->plist :result->plist :utc-now-iso :future-utc-iso :parse-iso8601
+           :format-iso8601
            :job-from-json :result-from-json :generate-uuid :clone-hash-table
            ;; cognition-job accessors (all slots)
            :cognition-job-id :cognition-job-agent-id :cognition-job-kind
@@ -135,6 +136,14 @@
   (:export :build-cognition-job :load-persona :persona-path :*job-ttl-seconds*
            :*job-max-attempts* :compute-priority))
 
+(defpackage :af64.runtime.task-scheduler
+  (:use :cl)
+  (:import-from :af64.runtime.cognition-types :parse-iso8601 :format-iso8601 :utc-now-iso)
+  (:import-from :af64.runtime.api :api-patch)
+  (:import-from :af64.utils.json :json-object :parse-json)
+  (:export :task-ready-p :deadline-urgency-boost :filter-scheduled-tasks
+           :handle-task-recurrence :parse-recurrence))
+
 (defpackage :af64.runtime.action-executor
   (:use :cl)
   (:import-from :af64.runtime.api :api-get :api-post :api-patch :api-put)
@@ -144,6 +153,7 @@
                 :cognition-result-job-id :cognition-result-provider-name
                 :cognition-result-cached :cognition-result-metadata)
   (:import-from :af64.runtime.energy :update-energy :get-energy :get-cost)
+  (:import-from :af64.runtime.task-scheduler :handle-task-recurrence)
   (:export :execute-cognition-result
            :get-tools-for-agent :format-tools-for-prompt :process-tool-calls
            :load-tool-registry))
@@ -189,6 +199,7 @@
   (:import-from :af64.runtime.drive :tick-drives :highest-pressure-drive :fulfill-drive)
   (:import-from :af64.runtime.energy :update-energy :get-energy :get-cost :+energy-rewards+)
   (:import-from :af64.runtime.perception :perceive :has-actionable-items :empty-perception)
+  (:import-from :af64.runtime.task-scheduler :filter-scheduled-tasks :deadline-urgency-boost)
   (:import-from :af64.runtime.tick-reporting :write-tick-report)
   (:export :run-tick :*tick-interval* :*max-actions-per-tick* :*broker*))
 
